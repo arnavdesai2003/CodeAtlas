@@ -2,12 +2,11 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
-from app.search.engine import search_code as elasticsearch_search
 from app.core.clients import elasticsearch_client, redis_client
 from app.db.database import engine
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.search.service import search_with_cache
 from app.api.schemas import (
     RepositoryCreateRequest,
     RepositoryCreateResponse,
@@ -157,7 +156,7 @@ def list_repositories(
 
 @router.post("/search")
 def search_code(request: SearchRequest):
-    results = elasticsearch_search(
+    search_result = search_with_cache(
         query=request.query,
         limit=request.limit,
     )
@@ -165,6 +164,19 @@ def search_code(request: SearchRequest):
     return {
         "query": request.query,
         "limit": request.limit,
-        "count": len(results),
-        "results": results,
+        "count": len(
+            search_result["results"]
+        ),
+        "cache_hit": search_result[
+            "cache_hit"
+        ],
+        "search_latency_ms": search_result[
+            "search_latency_ms"
+        ],
+        "elasticsearch_latency_ms": (
+            search_result.get(
+                "elasticsearch_latency_ms"
+            )
+        ),
+        "results": search_result["results"],
     }

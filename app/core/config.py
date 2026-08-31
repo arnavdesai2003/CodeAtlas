@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str
     elasticsearch_url: str
     redis_url: str
+    search_cache_ttl: int = 300
 
     model_config = SettingsConfigDict(
         env_file=".env",
