@@ -116,3 +116,60 @@ class CodeFile(Base):
     repository: Mapped["Repository"] = relationship(
         back_populates="files",
     )
+class CodeSymbol(Base):
+    __tablename__ = "code_symbols"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "file_id",
+            "name",
+            "kind",
+            "start_line",
+            name="uq_code_symbol_location",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    file_id: Mapped[int] = mapped_column(
+        ForeignKey("code_files.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        index=True,
+    )
+
+    qualified_name: Mapped[str] = mapped_column(
+        String(512),
+        nullable=False,
+    )
+
+    kind: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        index=True,
+    )
+
+    start_line: Mapped[int] = mapped_column(nullable=False)
+
+    end_line: Mapped[int] = mapped_column(nullable=False)
+
+    code: Mapped[str] = mapped_column(
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
