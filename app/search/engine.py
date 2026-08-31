@@ -192,3 +192,98 @@ def search_code(
         )
 
     return results
+
+def delete_paths_from_elasticsearch(
+    repository_id: int,
+    paths: list[str],
+) -> None:
+    if not paths:
+        return
+
+    create_symbol_index()
+
+    elasticsearch_client.delete_by_query(
+        index=INDEX_NAME,
+        query={
+            "bool": {
+                "filter": [
+                    {
+                        "term": {
+                            "repository_id": repository_id
+                        }
+                    },
+                    {
+                        "terms": {
+                            "path.keyword": paths
+                        }
+                    },
+                ]
+            }
+        },
+        conflicts="proceed",
+        refresh=True,
+    )
+
+
+def index_files_in_elasticsearch(
+    db: Session,
+    file_ids: list[int],
+) -> int:
+    if not file_ids:
+        return 0
+
+    create_symbol_index()
+
+    rows = (
+        db.query(CodeSymbol, CodeFile, Repository)
+        .join(
+            CodeFile,
+            CodeSymbol.file_id == CodeFile.id,
+        )
+        .join(
+            Repository,
+            CodeSymbol.repository_id == Repository.id,
+        )
+        .filter(
+            CodeFile.id.in_(file_ids)
+        )
+        .all()
+    )
+
+    actions = []
+
+    for symbol, code_file, repository in rows:
+        actions.append(
+            {
+                "_index": INDEX_NAME,
+                "_id": str(symbol.id),
+                "_source": {
+                    "repository_id": repository.id,
+                    "repository": repository.name,
+                    "file_id": code_file.id,
+                    "path": code_file.path,
+                    "language": code_file.language,
+                    "symbol_id": symbol.id,
+                    "name": symbol.name,
+                    "qualified_name": symbol.qualified_name,
+                    "kind": symbol.kind,
+                    "start_line": symbol.start_line,
+                    "end_line": symbol.end_line,
+                    "code": symbol.code,
+                },
+            }
+        )
+
+    if actions:
+        bulk(
+            elasticsearch_client.options(
+                request_timeout=30
+            ),
+            actions,
+        )
+
+        elasticsearch_client.indices.refresh(
+            index=INDEX_NAME
+        )
+
+    return len(actions)

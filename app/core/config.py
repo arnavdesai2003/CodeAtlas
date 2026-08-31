@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     elasticsearch_url: str
     redis_url: str
     search_cache_ttl: int = 300
+    github_webhook_secret: str
 
     model_config = SettingsConfigDict(
         env_file=".env",

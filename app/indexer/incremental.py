@@ -1,0 +1,370 @@
+from pathlib import Path
+import subprocess
+
+from sqlalchemy import delete
+from sqlalchemy.orm import Session
+
+from app.db.models import (
+    CodeFile,
+    CodeSymbol,
+    Repository,
+)
+from app.indexer.parser import parse_python_source
+from app.indexer.repository import (
+    LANGUAGE_BY_EXTENSION,
+    REPOSITORY_ROOT,
+    calculate_file_hash,
+    parse_github_url,
+)
+from app.search.cache import invalidate_search_cache
+from app.search.engine import (
+    delete_paths_from_elasticsearch,
+    index_files_in_elasticsearch,
+)
+
+
+def run_git(
+    repository_path: Path,
+    *args: str,
+) -> str:
+    result = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repository_path),
+            *args,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    return result.stdout.strip()
+
+
+def parse_git_diff(output: str) -> list[dict]:
+    changes = []
+
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+
+        parts = line.split("\t")
+        status = parts[0]
+
+        # Rename:
+        # R100    old/path.py    new/path.py
+        if status.startswith("R"):
+            changes.append(
+                {
+                    "status": "R",
+                    "old_path": parts[1],
+                    "path": parts[2],
+                }
+            )
+            continue
+
+        if len(parts) < 2:
+            continue
+
+        changes.append(
+            {
+                "status": status[0],
+                "path": parts[1],
+            }
+        )
+
+    return changes
+
+
+def sync_repository(
+    db: Session,
+    repository_id: int,
+) -> dict:
+    repository = db.get(
+        Repository,
+        repository_id,
+    )
+
+    if repository is None:
+        raise ValueError(
+            f"Repository {repository_id} does not exist."
+        )
+
+    owner, repository_name = parse_github_url(
+        repository.clone_url
+    )
+
+    repository_path = (
+        REPOSITORY_ROOT
+        / owner
+        / repository_name
+    )
+
+    if not repository_path.exists():
+        raise FileNotFoundError(
+            f"Repository directory not found: "
+            f"{repository_path}"
+        )
+
+    old_commit = repository.last_indexed_commit
+
+    if old_commit is None:
+        old_commit = run_git(
+            repository_path,
+            "rev-parse",
+            "HEAD",
+        )
+
+    branch = repository.default_branch
+
+    # Fetch newest commit without recloning.
+    run_git(
+        repository_path,
+        "fetch",
+        "--prune",
+        "origin",
+    )
+
+    new_commit = run_git(
+        repository_path,
+        "rev-parse",
+        f"origin/{branch}",
+    )
+
+    if old_commit == new_commit:
+        return {
+            "repository_id": repository.id,
+            "repository": repository.name,
+            "changed": False,
+            "old_commit": old_commit,
+            "new_commit": new_commit,
+            "files_added": 0,
+            "files_modified": 0,
+            "files_deleted": 0,
+            "files_renamed": 0,
+            "files_parsed": 0,
+            "symbols_indexed": 0,
+            "cache_entries_invalidated": 0,
+        }
+
+    diff_output = run_git(
+        repository_path,
+        "diff",
+        "--name-status",
+        old_commit,
+        new_commit,
+    )
+
+    changes = parse_git_diff(
+        diff_output
+    )
+
+    # Move working tree to newest fetched commit.
+    run_git(
+        repository_path,
+        "reset",
+        "--hard",
+        new_commit,
+    )
+
+    affected_paths: set[str] = set()
+    updated_file_ids: list[int] = []
+
+    files_added = 0
+    files_modified = 0
+    files_deleted = 0
+    files_renamed = 0
+    files_parsed = 0
+
+    try:
+        for change in changes:
+            status = change["status"]
+
+            # Handle deletion or rename of old path.
+            if status in {"D", "R"}:
+                old_path = (
+                    change["old_path"]
+                    if status == "R"
+                    else change["path"]
+                )
+
+                affected_paths.add(old_path)
+
+                existing_file = (
+                    db.query(CodeFile)
+                    .filter(
+                        CodeFile.repository_id
+                        == repository.id,
+                        CodeFile.path == old_path,
+                    )
+                    .first()
+                )
+
+                if existing_file is not None:
+                    db.execute(
+                        delete(CodeSymbol).where(
+                            CodeSymbol.file_id
+                            == existing_file.id
+                        )
+                    )
+
+                    db.delete(existing_file)
+
+                if status == "D":
+                    files_deleted += 1
+                    continue
+
+                files_renamed += 1
+
+            path = change["path"]
+
+            affected_paths.add(path)
+
+            extension = (
+                Path(path).suffix.lower()
+            )
+
+            language = LANGUAGE_BY_EXTENSION.get(
+                extension
+            )
+
+            # Ignore unsupported file types.
+            if language is None:
+                continue
+
+            absolute_path = (
+                repository_path / path
+            )
+
+            if not absolute_path.exists():
+                continue
+
+            code_file = (
+                db.query(CodeFile)
+                .filter(
+                    CodeFile.repository_id
+                    == repository.id,
+                    CodeFile.path == path,
+                )
+                .first()
+            )
+
+            if code_file is None:
+                code_file = CodeFile(
+                    repository_id=repository.id,
+                    path=path,
+                )
+
+                db.add(code_file)
+                db.flush()
+
+                if status != "R":
+                    files_added += 1
+
+            else:
+                if status == "M":
+                    files_modified += 1
+
+            code_file.language = language
+            code_file.content_hash = (
+                calculate_file_hash(
+                    absolute_path
+                )
+            )
+            code_file.last_indexed_commit = (
+                new_commit
+            )
+
+            # Remove old AST symbols.
+            db.execute(
+                delete(CodeSymbol).where(
+                    CodeSymbol.file_id
+                    == code_file.id
+                )
+            )
+
+            # Currently Tree-sitter support is
+            # implemented for Python.
+            if language == "python":
+                source_code = (
+                    absolute_path.read_text(
+                        encoding="utf-8",
+                        errors="replace",
+                    )
+                )
+
+                symbols = parse_python_source(
+                    source_code
+                )
+
+                for symbol in symbols:
+                    db.add(
+                        CodeSymbol(
+                            repository_id=repository.id,
+                            file_id=code_file.id,
+                            name=symbol.name,
+                            qualified_name=(
+                                symbol.qualified_name
+                            ),
+                            kind=symbol.kind,
+                            start_line=(
+                                symbol.start_line
+                            ),
+                            end_line=(
+                                symbol.end_line
+                            ),
+                            code=symbol.code,
+                        )
+                    )
+
+                files_parsed += 1
+
+            updated_file_ids.append(
+                code_file.id
+            )
+
+        repository.last_indexed_commit = (
+            new_commit
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    # Remove stale Elasticsearch documents.
+    delete_paths_from_elasticsearch(
+        repository_id=repository.id,
+        paths=list(affected_paths),
+    )
+
+    # Add only updated symbols back.
+    symbols_indexed = (
+        index_files_in_elasticsearch(
+            db=db,
+            file_ids=updated_file_ids,
+        )
+    )
+
+    cache_entries_invalidated = (
+        invalidate_search_cache()
+    )
+
+    return {
+        "repository_id": repository.id,
+        "repository": repository.name,
+        "changed": True,
+        "old_commit": old_commit,
+        "new_commit": new_commit,
+        "files_added": files_added,
+        "files_modified": files_modified,
+        "files_deleted": files_deleted,
+        "files_renamed": files_renamed,
+        "files_parsed": files_parsed,
+        "symbols_indexed": symbols_indexed,
+        "cache_entries_invalidated": (
+            cache_entries_invalidated
+        ),
+    }

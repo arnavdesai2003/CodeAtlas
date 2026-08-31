@@ -68,3 +68,19 @@ def set_cached_search(
         # Elasticsearch results should still be returned
         # even if Redis is unavailable.
         pass
+
+def invalidate_search_cache() -> int:
+    try:
+        keys = list(
+            redis_client.scan_iter(
+                match=f"{CACHE_PREFIX}*"
+            )
+        )
+
+        if not keys:
+            return 0
+
+        return redis_client.delete(*keys)
+
+    except Exception:
+        return 0

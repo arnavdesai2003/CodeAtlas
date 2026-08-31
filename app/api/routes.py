@@ -14,6 +14,7 @@ from app.api.schemas import (
 from app.db.database import engine, get_db
 from app.indexer.repository import ingest_repository
 from app.db.models import Repository
+from app.indexer.incremental import sync_repository
 
 
 router = APIRouter()
@@ -180,3 +181,37 @@ def search_code(request: SearchRequest):
         ),
         "results": search_result["results"],
     }
+    
+@router.post(
+    "/repositories/{repository_id}/sync"
+)
+def synchronize_repository(
+    repository_id: int,
+    db: Session = Depends(get_db),
+):
+    try:
+        return sync_repository(
+            db=db,
+            repository_id=repository_id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=str(exc),
+        ) from exc
+
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f"{type(exc).__name__}: "
+                f"{str(exc)}"
+            ),
+        ) from exc
