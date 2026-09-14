@@ -6,7 +6,9 @@ from app.core.config import settings
 
 elasticsearch_client = Elasticsearch(
     settings.elasticsearch_url,
-    request_timeout=2,
+    request_timeout=60,
+    retry_on_timeout=True,
+    max_retries=3,
 )
 
 

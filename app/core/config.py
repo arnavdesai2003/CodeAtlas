@@ -8,8 +8,10 @@ class Settings(BaseSettings):
     database_url: str
     elasticsearch_url: str
     redis_url: str
+
     search_cache_ttl: int = 300
-    github_webhook_secret: str
+    github_webhook_secret: str = ""
+    hybrid_semantic_weight: float = 0.60
 
     model_config = SettingsConfigDict(
         env_file=".env",
