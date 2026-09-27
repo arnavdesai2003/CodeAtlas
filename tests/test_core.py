@@ -1,0 +1,223 @@
+"""Offline regression tests; run python -m unittest discover -s tests -v."""
+
+import asyncio
+import ast
+import os
+from pathlib import Path
+import unittest
+from unittest.mock import Mock, patch
+
+# Set test configuration before importing modules; never connect to these URLs.
+os.environ.update(
+    DATABASE_URL="postgresql+psycopg://test:test@127.0.0.1/test",
+    ELASTICSEARCH_URL="http://127.0.0.1:9200",
+    REDIS_URL="redis://127.0.0.1:6379/15",
+    HF_HUB_OFFLINE="1",
+)
+
+import httpx
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.api import routes
+from app.indexer.parser import parse_python_source
+from app.indexer.repository import parse_github_url
+from app.indexer.incremental import parse_git_diff
+from app.search import cache, engine, service
+from scripts import benchmark_api
+
+
+class ServiceTests(unittest.TestCase):
+    def test_bypass_never_reads_or_writes_redis(self):
+        with patch.object(service, "get_cached_search") as read, \
+             patch.object(service, "set_cached_search") as write, \
+             patch.object(service, "search_code", return_value=[{"name": "x"}]) as search:
+            result = service.search_with_cache("original query", 10, bypass_cache=True)
+        read.assert_not_called()
+        write.assert_not_called()
+        search.assert_called_once_with(query="original query", limit=10)
+        self.assertFalse(result["cache_hit"])
+        self.assertIn("elasticsearch_latency_ms", result)
+
+    def test_empty_cached_results_are_a_hit(self):
+        with patch.object(service, "get_cached_search", return_value=[]), \
+             patch.object(service, "search_code") as search:
+            result = service.search_with_cache("q", 10)
+        self.assertTrue(result["cache_hit"])
+        search.assert_not_called()
+
+    def test_miss_searches_and_caches(self):
+        with patch.object(service, "get_cached_search", return_value=None), \
+             patch.object(service, "search_code", return_value=[]) as search, \
+             patch.object(service, "set_cached_search") as write:
+            result = service.search_with_cache("q", 10)
+        self.assertFalse(result["cache_hit"])
+        search.assert_called_once_with(query="q", limit=10)
+        write.assert_called_once_with(query="q", limit=10, results=[])
+
+    def test_engine_failure_is_not_cached(self):
+        with patch.object(service, "get_cached_search", return_value=None), \
+             patch.object(service, "search_code", side_effect=RuntimeError("offline")), \
+             patch.object(service, "set_cached_search") as write:
+            with self.assertRaises(RuntimeError):
+                service.search_with_cache("q", 10)
+        write.assert_not_called()
+
+
+class CacheTests(unittest.TestCase):
+    def test_normalization_and_limit(self):
+        self.assertEqual(cache.build_cache_key(" Q  Test ", 10), cache.build_cache_key("q test", 10))
+        self.assertNotEqual(cache.build_cache_key("q", 10), cache.build_cache_key("q", 5))
+
+    def test_outage_and_corrupt_json_fall_back(self):
+        with patch.object(cache, "redis_client") as redis:
+            redis.get.side_effect = ConnectionError()
+            self.assertIsNone(cache.get_cached_search("q", 10))
+            redis.get.side_effect = None
+            redis.get.return_value = "not JSON"
+            self.assertIsNone(cache.get_cached_search("q", 10))
+            redis.setex.side_effect = ConnectionError()
+            cache.set_cached_search("q", 10, [])
+
+    def test_invalidation_is_namespaced(self):
+        with patch.object(cache, "redis_client") as redis:
+            redis.scan_iter.return_value = ["codeatlas:search:a"]
+            redis.delete.return_value = 1
+            self.assertEqual(cache.invalidate_search_cache(), 1)
+            redis.scan_iter.assert_called_once_with(match="codeatlas:search:*")
+            redis.delete.assert_called_once_with("codeatlas:search:a")
+
+
+class ApiTests(unittest.TestCase):
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(routes.router)
+        self.client = TestClient(app, client=("127.0.0.1", 12345))
+        self.addCleanup(self.client.close)
+        self.search = patch.object(routes, "search_with_cache", return_value={
+            "results": [], "cache_hit": False, "search_latency_ms": 2,
+            "elasticsearch_latency_ms": 1,
+        }).start()
+        self.addCleanup(patch.stopall)
+
+    def test_default_request_unchanged(self):
+        response = self.client.post("/search", json={"query": "q"})
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("X-CodeAtlas-Cache-Bypassed", response.headers)
+        self.search.assert_called_once_with(query="q", limit=10, bypass_cache=False)
+
+    def test_bypass_requires_opt_in_development_and_loopback(self):
+        for enabled, environment, host in [
+            (False, "development", "127.0.0.1"),
+            (True, "production", "127.0.0.1"),
+            (True, "development", "192.0.2.1"),
+        ]:
+            with self.subTest(enabled=enabled, environment=environment, host=host), \
+                 patch.object(routes.settings, "benchmark_cache_bypass_enabled", enabled), \
+                 patch.object(routes.settings, "app_env", environment), \
+                 TestClient(self.client.app, client=(host, 12345)) as client:
+                response = client.post("/search", json={"query": "q"}, headers={
+                    "X-CodeAtlas-Benchmark-Bypass": "true", "X-Forwarded-For": "127.0.0.1",
+                })
+                self.assertEqual(response.status_code, 403)
+        self.search.assert_not_called()
+
+    def test_enabled_bypass_acknowledged(self):
+        with patch.object(routes.settings, "benchmark_cache_bypass_enabled", True), \
+             patch.object(routes.settings, "app_env", "development"):
+            response = self.client.post("/search", json={"query": "q", "limit": 10},
+                                        headers={"X-CodeAtlas-Benchmark-Bypass": "true"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["X-CodeAtlas-Cache-Bypassed"], "true")
+        self.search.assert_called_once_with(query="q", limit=10, bypass_cache=True)
+
+    def test_validation(self):
+        for payload in [{}, {"query": ""}, {"query": "q", "limit": 0}, {"query": "q", "limit": 101}]:
+            self.assertEqual(self.client.post("/search", json=payload).status_code, 422)
+        self.search.assert_not_called()
+
+
+class RetrievalTests(unittest.TestCase):
+    def test_fusion_deduplicates_and_weights(self):
+        def hit(name, score):
+            return dict(repository="repo", path=name, start_line=1, score=score)
+        with patch.object(engine, "bm25_search", return_value=[hit("a", 10), hit("b", 2)]) as bm25, \
+             patch.object(engine, "semantic_search", return_value=[hit("b", .9), hit("c", .5)]) as semantic:
+            results = engine.hybrid_search_weighted("q", 10, .6)
+        self.assertEqual([r["path"] for r in results], ["b", "a", "c"])
+        self.assertEqual([r["score"] for r in results], [.6, .4, 0])
+        bm25.assert_called_once_with("q", 40)
+        semantic.assert_called_once_with("q", 40)
+
+    def test_bm25_filters_tests_unless_requested(self):
+        with patch.object(engine, "create_symbol_index"), patch.object(engine, "elasticsearch_client") as es:
+            es.options.return_value.search.return_value = {"hits": {"hits": []}}
+            engine.bm25_search("http request")
+            query = es.options.return_value.search.call_args.kwargs["query"]
+            self.assertEqual(query["bool"]["filter"], [{"term": {"is_test": False}}])
+            engine.bm25_search("unit test")
+            self.assertIn("multi_match", es.options.return_value.search.call_args.kwargs["query"])
+
+    def test_semantic_uses_embedding_and_candidate_count(self):
+        with patch.object(engine, "create_symbol_index"), \
+             patch.object(engine, "embed_text", return_value=[.1, .2]) as embed, \
+             patch.object(engine, "elasticsearch_client") as es:
+            es.options.return_value.search.return_value = {"hits": {"hits": []}}
+            engine.semantic_search("q", 40)
+        embed.assert_called_once_with("q")
+        knn = es.options.return_value.search.call_args.kwargs["knn"]
+        self.assertEqual(knn["query_vector"], [.1, .2])
+        self.assertEqual(knn["num_candidates"], 320)
+
+
+class ParserTests(unittest.TestCase):
+    def test_python_symbols(self):
+        symbols = parse_python_source("class A:\n    def run(self):\n        return 1\n")
+        self.assertEqual([(s.qualified_name, s.kind) for s in symbols], [("A", "class"), ("A.run", "method")])
+        self.assertEqual(symbols[1].start_line, 2)
+
+    def test_github_url_validation(self):
+        self.assertEqual(parse_github_url("https://github.com/pallets/click.git"), ("pallets", "click"))
+        for url in ["file:///tmp/repo", "https://example.com/a/b", "https://github.com/a"]:
+            with self.assertRaises(ValueError):
+                parse_github_url(url)
+
+    def test_incremental_diff(self):
+        self.assertEqual(parse_git_diff("M\ta.py\nR100\tb.py\tc.py\nD\td.py\n"), [
+            {"status": "M", "path": "a.py"},
+            {"status": "R", "old_path": "b.py", "path": "c.py"},
+            {"status": "D", "path": "d.py"},
+        ])
+
+
+class BenchmarkTests(unittest.IsolatedAsyncioTestCase):
+    def test_workload_parity(self):
+        source = ast.parse(Path("scripts/benchmark_concurrent.py").read_text())
+        for node in source.body:
+            if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+                name = node.targets[0].id
+                if name in {"QUERIES", "TOTAL_REQUESTS", "CONCURRENCY_LEVELS"}:
+                    self.assertEqual(getattr(benchmark_api, name), ast.literal_eval(node.value))
+
+    async def test_uncached_rejects_unconfirmed_or_cached_response(self):
+        for acknowledged, hit in [(False, False), (True, True), (True, False)]:
+            async with httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, headers={"X-CodeAtlas-Cache-Bypassed": str(acknowledged).lower()},
+                    json={"results": [], "cache_hit": hit, "search_latency_ms": 2, "elasticsearch_latency_ms": 1})
+            )) as client:
+                result = await benchmark_api.run_request(client, "unchanged", uncached=True)
+            self.assertEqual(result.error is None, acknowledged and not hit)
+
+    async def test_timeout_and_http_failure_are_counted(self):
+        def timeout(request):
+            raise httpx.ReadTimeout("timeout", request=request)
+        async with httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(timeout)) as client:
+            result = await benchmark_api.run_request(client, "q")
+        summary = benchmark_api.summarize([result], 1, 1)
+        self.assertEqual(summary["failed"], 1)
+        self.assertEqual(summary["no_response"], 1)
+        self.assertIsNone(summary["p95"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -10,10 +10,12 @@ from app.search.engine import search_code
 def search_with_cache(
     query: str,
     limit: int,
+    *,
+    bypass_cache: bool = False,
 ) -> dict:
     total_start = perf_counter()
 
-    cached_results = get_cached_search(
+    cached_results = None if bypass_cache else get_cached_search(
         query=query,
         limit=limit,
     )
@@ -43,11 +45,12 @@ def search_with_cache(
         perf_counter() - elasticsearch_start
     ) * 1000
 
-    set_cached_search(
-        query=query,
-        limit=limit,
-        results=results,
-    )
+    if not bypass_cache:
+        set_cached_search(
+            query=query,
+            limit=limit,
+            results=results,
+        )
 
     total_latency_ms = (
         perf_counter() - total_start

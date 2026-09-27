@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     search_cache_ttl: int = 300
     github_webhook_secret: str = ""
     hybrid_semantic_weight: float = 0.60
+    benchmark_cache_bypass_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -1,8 +1,11 @@
-from fastapi import APIRouter
+from ipaddress import ip_address
+
+from fastapi import APIRouter, Header, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from app.core.clients import elasticsearch_client, redis_client
+from app.core.config import settings
 from app.db.database import engine
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -156,10 +159,31 @@ def list_repositories(
 
 
 @router.post("/search")
-def search_code(request: SearchRequest):
+def search_code(
+    request: SearchRequest,
+    http_request: Request,
+    response: Response,
+    benchmark_bypass: bool = Header(default=False, alias="X-CodeAtlas-Benchmark-Bypass"),
+):
+    if benchmark_bypass:
+        try:
+            loopback = bool(
+                http_request.client and ip_address(http_request.client.host).is_loopback
+            )
+        except ValueError:
+            loopback = False
+        if not (
+            settings.benchmark_cache_bypass_enabled
+            and settings.app_env in {"development", "test"}
+            and loopback
+        ):
+            raise HTTPException(status_code=403, detail="Benchmark cache bypass is disabled.")
+        response.headers["X-CodeAtlas-Cache-Bypassed"] = "true"
+
     search_result = search_with_cache(
         query=request.query,
         limit=request.limit,
+        bypass_cache=benchmark_bypass,
     )
 
     return {
