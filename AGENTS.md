@@ -154,7 +154,19 @@ BENCHMARK_CACHE_BYPASS_ENABLED=true APP_ENV=development .venv/bin/python -m uvic
 .venv/bin/python -B -m unittest discover -s tests -v
 ```
 
-Twenty offline tests established; README now documents setup. Requirements
+Twenty-three offline tests established; README now documents setup. Requirements
 normalized from UTF-16/CRLF to UTF-8/LF with all 69 dependency lines preserved.
-Next measured experiment: remove index existence probes from read-only search,
-then test, benchmark, evaluate and compare before retaining.
+Removed redundant index existence probes from BM25/semantic read paths after
+profiling: indexing creates the index, search requires it and never creates an
+empty index. Uncached HTTP now measures 50.89/140.86/144.41/143.08 req/s at
+1/5/10/20, 800 successes, zero hits. All 25 evaluation cases valid; all retrieval
+metrics reproduced exactly, including hybrid Recall@10 .880 and MRR .499.
+Post-change profiling shows embedding 102.794 ms versus full-hybrid 122.517 ms
+average at twenty workers on MPS. Remaining performance investigation: embedding
+execution/queuing and device/concurrency settings; do not tune ranking to hide
+this cost. Expand ingestion/sync recovery tests before changing those paths.
+Repeat uncached HTTP run: 50.30/136.05/147.85/151.47 req/s, all 800 successful,
+zero hits. Beyond ten workers adds at most 2.4% throughput in these two runs
+while p95 roughly doubles. Details and limitations are in `docs/performance.md`.
+Temporary benchmark server on 8001 is stopped when work finishes; port 8000
+was not restarted. No infrastructure, ranking weights or candidate sizes changed.

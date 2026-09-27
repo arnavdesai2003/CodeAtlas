@@ -66,6 +66,9 @@ def main():
         for label in ["Embedding", "Index existence check", "BM25 ES request", "Vector ES request",
                       "BM25 branch", "Semantic branch", "Full hybrid"]:
             values = timings[label]
+            if not values:
+                print(f"{label:<24} n=  0 (not called)", flush=True)
+                continue
             print(f"{label:<24} n={len(values):>3} avg={statistics.mean(values):>9.3f} ms "
                   f"p95={percentile(values, .95):>9.3f} ms", flush=True)
 

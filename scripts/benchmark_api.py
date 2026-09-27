@@ -1,4 +1,4 @@
-"""Warm-cache HTTP benchmark. Run with: python -m scripts.benchmark_api.
+"""HTTP benchmark: warm cache by default; --uncached requires guarded bypass.
 
 Client latency covers sending the request and reading the complete response,
 excluding local worker-queue wait and JSON validation. Server timings are
@@ -200,7 +200,7 @@ async def benchmark(workers, *, uncached=False, base_url=BASE_URL):
             print("Skipped this concurrency level; no measured requests sent.")
             return None
 
-        # Warm all query/limit cache keys without flushing Redis.
+        # Warm models/connections and, in cached mode, all query/limit keys.
         # A failed warm-up request does not abort subsequent requests.
         warmup = [await run_request(client, query, uncached) for query in QUERIES]
         warmup_failures = sum(result.error is not None for result in warmup)

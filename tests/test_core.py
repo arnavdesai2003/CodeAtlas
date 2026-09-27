@@ -4,8 +4,10 @@ import asyncio
 import ast
 import os
 from pathlib import Path
+from contextlib import redirect_stdout
+import io
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 # Set test configuration before importing modules; never connect to these URLs.
 os.environ.update(
@@ -150,16 +152,17 @@ class RetrievalTests(unittest.TestCase):
         semantic.assert_called_once_with("q", 40)
 
     def test_bm25_filters_tests_unless_requested(self):
-        with patch.object(engine, "create_symbol_index"), patch.object(engine, "elasticsearch_client") as es:
+        with patch.object(engine, "create_symbol_index") as create, patch.object(engine, "elasticsearch_client") as es:
             es.options.return_value.search.return_value = {"hits": {"hits": []}}
             engine.bm25_search("http request")
             query = es.options.return_value.search.call_args.kwargs["query"]
             self.assertEqual(query["bool"]["filter"], [{"term": {"is_test": False}}])
             engine.bm25_search("unit test")
             self.assertIn("multi_match", es.options.return_value.search.call_args.kwargs["query"])
+        create.assert_not_called()
 
     def test_semantic_uses_embedding_and_candidate_count(self):
-        with patch.object(engine, "create_symbol_index"), \
+        with patch.object(engine, "create_symbol_index") as create, \
              patch.object(engine, "embed_text", return_value=[.1, .2]) as embed, \
              patch.object(engine, "elasticsearch_client") as es:
             es.options.return_value.search.return_value = {"hits": {"hits": []}}
@@ -168,6 +171,15 @@ class RetrievalTests(unittest.TestCase):
         knn = es.options.return_value.search.call_args.kwargs["knn"]
         self.assertEqual(knn["query_vector"], [.1, .2])
         self.assertEqual(knn["num_candidates"], 320)
+        create.assert_not_called()
+
+    def test_missing_index_does_not_create_empty_index(self):
+        with patch.object(engine, "create_symbol_index") as create, \
+             patch.object(engine, "elasticsearch_client") as es:
+            es.options.return_value.search.side_effect = RuntimeError("index not found")
+            with self.assertRaises(RuntimeError):
+                engine.bm25_search("q")
+        create.assert_not_called()
 
 
 class ParserTests(unittest.TestCase):
@@ -217,6 +229,58 @@ class BenchmarkTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(summary["failed"], 1)
         self.assertEqual(summary["no_response"], 1)
         self.assertIsNone(summary["p95"])
+        async with httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(
+            lambda request: httpx.Response(503)
+        )) as client:
+            failed = await benchmark_api.run_request(client, "q")
+        summary = benchmark_api.summarize([result, failed], 1, 1)
+        self.assertEqual(summary["failed"], 2)
+        self.assertEqual(summary["statuses"], {503: 1})
+
+    async def test_workers_bound_concurrency_and_exclude_warmup(self):
+        active = peak = measured = 0
+        calls = []
+
+        async def handler(request):
+            nonlocal active, peak, measured
+            if request.url.path == "/health":
+                calls.append("health")
+                return httpx.Response(200, json={"status": "healthy"})
+            self.assertEqual(request.headers["X-CodeAtlas-Benchmark-Bypass"], "true")
+            calls.append("search")
+            active += 1
+            peak = max(peak, active)
+            await asyncio.sleep(0)
+            active -= 1
+            measured += 1
+            return httpx.Response(200, headers={"X-CodeAtlas-Cache-Bypassed": "true"}, json={
+                "results": [], "cache_hit": False, "search_latency_ms": 1,
+                "elasticsearch_latency_ms": .9,
+            })
+
+        client = httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(handler))
+        with patch.object(benchmark_api.httpx, "AsyncClient", return_value=client), redirect_stdout(io.StringIO()):
+            summary = await benchmark_api.benchmark(5, uncached=True)
+        self.assertEqual(calls[0], "health")
+        self.assertEqual(measured, 210)
+        self.assertEqual(peak, 5)
+        self.assertEqual(summary["total"], 200)
+        self.assertEqual(summary["successful"], 200)
+
+    async def test_uncached_preflight_failure_skips_measured_requests(self):
+        calls = []
+
+        def handler(request):
+            calls.append(request.url.path)
+            if request.url.path == "/health":
+                return httpx.Response(200, json={"status": "healthy"})
+            return httpx.Response(403)
+
+        client = httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(handler))
+        with patch.object(benchmark_api.httpx, "AsyncClient", return_value=client), redirect_stdout(io.StringIO()):
+            summary = await benchmark_api.benchmark(5, uncached=True)
+        self.assertIsNone(summary)
+        self.assertEqual(len(calls), 11)
 
 
 if __name__ == "__main__":

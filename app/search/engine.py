@@ -588,9 +588,8 @@ def bm25_search(
     Perform lexical code search using Elasticsearch BM25.
 
     Test code is excluded unless the query appears to request tests.
+    The symbol index must already exist; indexing owns index creation.
     """
-
-    create_symbol_index()
 
     lexical_query = {
         "multi_match": {
@@ -656,9 +655,8 @@ def semantic_search(
     Perform semantic code retrieval using vector kNN search.
 
     Test files are filtered for normal implementation-oriented queries.
+    The symbol index must already exist; indexing owns index creation.
     """
-
-    create_symbol_index()
 
     query_vector = embed_text(
         query

@@ -71,6 +71,8 @@ path checks Redis, runs BM25 and vector retrieval concurrently on a miss,
 normalizes and fuses scores (60% semantic / 40% BM25 by default), then caches
 the results. Reranking is available to evaluation code but is not enabled on
 the default API. Test code is excluded unless the query indicates test intent.
+Search requires an existing symbol index and never creates one. Run the
+indexing workflow before searching a new installation.
 
 Responses include source code, symbol location, component scores/ranks,
 `cache_hit` and timing fields. `search_latency_ms` covers the search service;
@@ -138,8 +140,9 @@ stages and adds overhead: its stage averages must not be summed.
 
 Keep **warm-cache HTTP**, **uncached HTTP**, **direct engine**, and **component
 profiling** results separate. Short runs indicate a throughput knee, not a
-proven sustained capacity ceiling. See [AGENTS.md](AGENTS.md) for persistent
-development context and inherited baselines.
+proven sustained capacity ceiling. See [measured results](docs/performance.md)
+for baselines, the index-probe experiment, and quality verification;
+[AGENTS.md](AGENTS.md) holds persistent development context and inherited baselines.
 
 ## Development map and limitations
 
