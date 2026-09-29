@@ -196,5 +196,35 @@ the sandbox cannot access MPS even though host PyTorch can.
 28 offline tests pass. CPU/one-thread multi-repository evaluation reproduced
 all metrics, 25 valid cases, hybrid Recall@10 .880 and MRR .499. No model,
 embedding dimensions, candidate sizing, weights, corpus or index changes.
-Next engineering priority: ingestion and incremental-sync failure/recovery
-coverage, especially cross-store partial commits, before modifying those paths.
+Next engineering priority at that checkpoint was ingestion and incremental-sync
+failure/recovery coverage; completed in the milestone below.
+
+## Latest milestone: durable sync recovery (2026-09-28)
+
+Fixed premature sync checkpoint advancement and ingestion post-commit cleanup.
+`repository_sync_jobs` is an additive PostgreSQL table created by `init_db()`;
+it was created in the local development database during verification. It stores
+target commit, previous commit, affected paths, file IDs and change counts with
+the metadata transaction. Elasticsearch deletion/indexing and strict Redis
+invalidation must succeed before checkpoint advancement and job deletion commit.
+Retry pending work before fetching new Git changes; `resumed=true` in the sync
+response identifies recovery. A newer remote target needs a subsequent sync.
+
+PostgreSQL session advisory locks serialize cooperating sync callers across
+metadata commits; contention returns HTTP 409. Full indexers reject existing
+pending jobs but do not share this lock: never run full indexing concurrently
+with sync. Do not delete pending jobs manually. Recovery is not cross-store
+atomicity and does not fence stale cache refills from in-flight searches.
+Older-version failures without a job are not automatically reconstructed.
+
+Ingestion reserves clone directories atomically, builds its response before
+commit and preserves clones after ambiguous commit failures. Inspect metadata
+before reconciling an orphan clone; never auto-delete possibly committed data.
+See `docs/sync-recovery.md` for workflows, validation and limitations.
+
+53 offline tests pass. Transaction/failure tests use temporary SQLite with foreign keys and
+mocked external services. Live PostgreSQL verified advisory exclusion across
+commit and release on exceptions. Retrieval evaluation reproduced all metrics,
+25 valid cases, hybrid Recall@10 .880 / MRR .499; live corpus not reindexed.
+Next priorities: in-flight stale cache invalidation and coordinated/atomic full
+index rebuilds. No new performance claims for the recovery milestone.

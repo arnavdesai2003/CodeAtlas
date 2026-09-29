@@ -89,6 +89,13 @@ class CacheTests(unittest.TestCase):
             redis.scan_iter.assert_called_once_with(match="codeatlas:search:*")
             redis.delete.assert_called_once_with("codeatlas:search:a")
 
+    def test_strict_invalidation_surfaces_failure(self):
+        with patch.object(cache, "redis_client") as redis:
+            redis.scan_iter.side_effect = ConnectionError("offline")
+            self.assertEqual(cache.invalidate_search_cache(), 0)
+            with self.assertRaises(ConnectionError):
+                cache.invalidate_search_cache(strict=True)
+
 
 class ApiTests(unittest.TestCase):
     def setUp(self):
@@ -138,8 +145,30 @@ class ApiTests(unittest.TestCase):
             self.assertEqual(self.client.post("/search", json=payload).status_code, 422)
         self.search.assert_not_called()
 
+    def test_concurrent_sync_returns_conflict(self):
+        with patch.object(routes, "sync_repository", side_effect=routes.RepositorySyncInProgress("busy")):
+            response = self.client.post("/repositories/1/sync")
+        self.assertEqual(response.status_code, 409)
+
 
 class RetrievalTests(unittest.TestCase):
+    def test_incomplete_path_deletion_is_not_success(self):
+        for response in [{"timed_out": True}, {"failures": [{"reason": "failed"}]}, {"version_conflicts": 1}]:
+            with self.subTest(response=response), \
+                 patch.object(engine, "create_symbol_index"), \
+                 patch.object(engine, "elasticsearch_client") as es:
+                es.options.return_value.delete_by_query.return_value = response
+                with self.assertRaises(RuntimeError):
+                    engine.delete_paths_from_elasticsearch(1, ["a.py"])
+
+    def test_successful_path_deletion(self):
+        with patch.object(engine, "create_symbol_index"), patch.object(engine, "elasticsearch_client") as es:
+            es.options.return_value.delete_by_query.return_value = {
+                "timed_out": False, "failures": [], "version_conflicts": 0,
+            }
+            engine.delete_paths_from_elasticsearch(1, ["a.py"])
+            es.options.return_value.delete_by_query.assert_called_once()
+
     def test_fusion_deduplicates_and_weights(self):
         def hit(name, score):
             return dict(repository="repo", path=name, start_line=1, score=score)

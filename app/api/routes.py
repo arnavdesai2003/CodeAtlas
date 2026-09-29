@@ -17,7 +17,7 @@ from app.api.schemas import (
 from app.db.database import engine, get_db
 from app.indexer.repository import ingest_repository
 from app.db.models import Repository
-from app.indexer.incremental import sync_repository
+from app.indexer.incremental import sync_repository, RepositorySyncInProgress
 
 
 router = APIRouter()
@@ -218,6 +218,9 @@ def synchronize_repository(
             db=db,
             repository_id=repository_id,
         )
+
+    except RepositorySyncInProgress as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     except ValueError as exc:
         raise HTTPException(

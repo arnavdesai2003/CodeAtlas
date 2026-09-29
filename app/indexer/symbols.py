@@ -3,7 +3,7 @@ from pathlib import Path
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.db.models import CodeFile, CodeSymbol, Repository
+from app.db.models import CodeFile, CodeSymbol, Repository, RepositorySyncJob
 from app.indexer.parser import parse_python_source
 from app.indexer.repository import REPOSITORY_ROOT, parse_github_url
 
@@ -12,6 +12,9 @@ def index_repository_symbols(
     db: Session,
     repository_id: int,
 ) -> dict:
+    if db.get(RepositorySyncJob, repository_id) is not None:
+        raise RuntimeError("Finish pending repository synchronization before full symbol indexing.")
+
     repository = db.get(Repository, repository_id)
 
     if repository is None:

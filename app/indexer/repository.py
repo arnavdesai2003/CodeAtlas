@@ -69,6 +69,8 @@ def parse_github_url(clone_url: str) -> tuple[str, str]:
 
     if not owner or not repository_name:
         raise ValueError("Invalid GitHub repository URL.")
+    if owner in {".", ".."} or repository_name in {".", ".."}:
+        raise ValueError("Invalid GitHub repository path component.")
 
     return owner, repository_name
 
@@ -180,6 +182,15 @@ def ingest_repository(
         exist_ok=True,
     )
 
+    # Reserve the destination atomically. A losing concurrent request must
+    # never clean up a directory that another ingestion owns.
+    try:
+        repository_path.mkdir()
+    except FileExistsError as exc:
+        raise ValueError(f"Repository directory already exists: {repository_path}") from exc
+
+    commit_started = False
+
     try:
         subprocess.run(
             [
@@ -221,10 +232,9 @@ def ingest_repository(
                 )
             )
 
-        db.commit()
-        db.refresh(repository)
-
-        return {
+        # Build the response before commit: no fallible database reads after a
+        # successful commit may trigger cleanup of the registered clone.
+        result = {
             "repository_id": repository.id,
             "name": repository.name,
             "owner": owner,
@@ -234,11 +244,14 @@ def ingest_repository(
             "source_files_discovered": len(source_files),
             "local_path": str(repository_path),
         }
+        commit_started = True
+        db.commit()
+        return result
 
     except subprocess.CalledProcessError as exc:
         db.rollback()
 
-        if repository_path.exists():
+        if not commit_started and repository_path.exists():
             shutil.rmtree(repository_path)
 
         error_message = (
@@ -252,7 +265,9 @@ def ingest_repository(
     except Exception:
         db.rollback()
 
-        if repository_path.exists():
+        # A lost commit acknowledgement has an ambiguous outcome. Preserve
+        # the clone rather than deleting files for a possibly committed row.
+        if not commit_started and repository_path.exists():
             shutil.rmtree(repository_path)
 
         raise

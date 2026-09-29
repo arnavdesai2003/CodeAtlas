@@ -1,13 +1,15 @@
 from pathlib import Path
+from contextlib import contextmanager
 import subprocess
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from sqlalchemy.orm import Session
 
 from app.db.models import (
     CodeFile,
     CodeSymbol,
     Repository,
+    RepositorySyncJob,
 )
 from app.indexer.parser import parse_python_source
 from app.indexer.repository import (
@@ -77,19 +79,98 @@ def parse_git_diff(output: str) -> list[dict]:
     return changes
 
 
-def sync_repository(
+class RepositorySyncInProgress(RuntimeError):
+    pass
+
+
+@contextmanager
+def repository_sync_lock(db: Session, repository_id: int):
+    """Session advisory lock survives the metadata transaction's commit.
+
+    SQLite is used only by single-threaded offline transaction tests. Production
+    PostgreSQL callers share this lock across processes and webhook/API paths.
+    """
+    bind = db.get_bind()
+    if bind.dialect.name == "sqlite":
+        yield
+        return
+    if bind.dialect.name != "postgresql":
+        raise RuntimeError("Repository synchronization requires PostgreSQL.")
+    params = {"namespace": 0x4341544C, "repository_id": repository_id}
+    with bind.connect() as connection:
+        try:
+            acquired = connection.execute(text(
+                "SELECT pg_try_advisory_lock(:namespace, :repository_id)"
+            ), params).scalar_one()
+        except Exception:
+            connection.invalidate()
+            raise
+        if not acquired:
+            raise RepositorySyncInProgress("Repository synchronization is already in progress.")
+        try:
+            yield
+        finally:
+            try:
+                connection.execute(text(
+                    "SELECT pg_advisory_unlock(:namespace, :repository_id)"
+                ), params)
+            except Exception:
+                # Never return a connection with a session lock to the pool.
+                connection.invalidate()
+                raise
+
+
+def sync_repository(db: Session, repository_id: int) -> dict:
+    with repository_sync_lock(db, repository_id):
+        try:
+            return _sync_repository(db, repository_id)
+        except Exception:
+            db.rollback()
+            raise
+
+
+def _finish_sync(db: Session, repository: Repository, job: RepositorySyncJob, *, resumed: bool) -> dict:
+    # Safe to replay after any partial delete, bulk-index or final commit failure.
+    delete_paths_from_elasticsearch(repository_id=repository.id, paths=job.affected_paths)
+    symbols_indexed = index_files_in_elasticsearch(db=db, file_ids=job.file_ids)
+    invalidated = invalidate_search_cache(strict=True)
+    result = {
+        "repository_id": repository.id,
+        "repository": repository.name,
+        "changed": True,
+        "resumed": resumed,
+        "old_commit": job.old_commit,
+        "new_commit": job.target_commit,
+        **job.stats,
+        "symbols_indexed": symbols_indexed,
+        "cache_entries_invalidated": invalidated,
+    }
+    repository.last_indexed_commit = job.target_commit
+    db.delete(job)
+    db.commit()
+    return result
+
+
+def _sync_repository(
     db: Session,
     repository_id: int,
 ) -> dict:
     repository = db.get(
         Repository,
         repository_id,
+        populate_existing=True,
     )
 
     if repository is None:
         raise ValueError(
             f"Repository {repository_id} does not exist."
         )
+
+    pending = db.get(RepositorySyncJob, repository_id)
+    if pending is not None:
+        # Finish the recorded target before fetching a newer remote commit.
+        # Metadata/symbol IDs from that target are already durably committed.
+        return _finish_sync(db, repository, pending, resumed=True)
 
     owner, repository_name = parse_github_url(
         repository.clone_url
@@ -324,47 +405,25 @@ def sync_repository(
                 code_file.id
             )
 
-        repository.last_indexed_commit = (
-            new_commit
+        job = RepositorySyncJob(
+            repository_id=repository.id,
+            old_commit=old_commit,
+            target_commit=new_commit,
+            affected_paths=sorted(affected_paths),
+            file_ids=updated_file_ids,
+            stats={
+                "files_added": files_added,
+                "files_modified": files_modified,
+                "files_deleted": files_deleted,
+                "files_renamed": files_renamed,
+                "files_parsed": files_parsed,
+            },
         )
-
+        db.add(job)
         db.commit()
 
     except Exception:
         db.rollback()
         raise
 
-    # Remove stale Elasticsearch documents.
-    delete_paths_from_elasticsearch(
-        repository_id=repository.id,
-        paths=list(affected_paths),
-    )
-
-    # Add only updated symbols back.
-    symbols_indexed = (
-        index_files_in_elasticsearch(
-            db=db,
-            file_ids=updated_file_ids,
-        )
-    )
-
-    cache_entries_invalidated = (
-        invalidate_search_cache()
-    )
-
-    return {
-        "repository_id": repository.id,
-        "repository": repository.name,
-        "changed": True,
-        "old_commit": old_commit,
-        "new_commit": new_commit,
-        "files_added": files_added,
-        "files_modified": files_modified,
-        "files_deleted": files_deleted,
-        "files_renamed": files_renamed,
-        "files_parsed": files_parsed,
-        "symbols_indexed": symbols_indexed,
-        "cache_entries_invalidated": (
-            cache_entries_invalidated
-        ),
-    }
+    return _finish_sync(db, repository, job, resumed=False)

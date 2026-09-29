@@ -5,6 +5,7 @@ from datetime import datetime
 from sqlalchemy import (
     DateTime,
     ForeignKey,
+    JSON,
     String,
     UniqueConstraint,
     func,
@@ -59,6 +60,21 @@ class Repository(Base):
         back_populates="repository",
         cascade="all, delete-orphan",
     )
+
+
+class RepositorySyncJob(Base):
+    """Durable work left between metadata commit and search-index publication."""
+
+    __tablename__ = "repository_sync_jobs"
+
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repositories.id", ondelete="CASCADE"), primary_key=True,
+    )
+    old_commit: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_commit: Mapped[str] = mapped_column(String(64), nullable=False)
+    affected_paths: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    file_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False)
+    stats: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
 class CodeFile(Base):

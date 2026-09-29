@@ -69,7 +69,7 @@ def set_cached_search(
         # even if Redis is unavailable.
         pass
 
-def invalidate_search_cache() -> int:
+def invalidate_search_cache(*, strict: bool = False) -> int:
     try:
         keys = list(
             redis_client.scan_iter(
@@ -83,4 +83,6 @@ def invalidate_search_cache() -> int:
         return redis_client.delete(*keys)
 
     except Exception:
+        if strict:
+            raise
         return 0

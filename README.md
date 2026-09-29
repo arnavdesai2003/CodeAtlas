@@ -58,6 +58,14 @@ cache entries. It resets the generated clone to the fetched commit: do not
 edit generated clones. Signed push events to `/webhooks/github` trigger the
 same synchronization; set `GITHUB_WEBHOOK_SECRET` before using webhooks.
 
+Sync records unfinished publication work in PostgreSQL and advances its
+checkpoint only after Elasticsearch updates and cache invalidation succeed.
+Retrying `/repositories/{id}/sync` resumes a pending target; `resumed=true`
+identifies that case. Concurrent sync requests for the same repository return
+HTTP 409. See [sync recovery](docs/sync-recovery.md) for failure handling,
+installation and operational limits. Full indexers reject pending jobs; do not
+run full indexing concurrently with sync.
+
 ## Search
 
 ```sh
@@ -182,7 +190,9 @@ for baselines, the index-probe experiment, and quality verification;
 `scripts` operational tools; `tests` offline regression tests.
 
 Full reindexing and cross-store incremental updates are not transactional across
-PostgreSQL and Elasticsearch. Generated symbol IDs can leave stale documents
-after full reindexing; verify consistency rather than blindly rebuilding.
-Simultaneous cache misses are not coalesced. Public deployment hardening and
-recovery from partial synchronization remain future work.
+PostgreSQL and Elasticsearch. Pending sync jobs support retry after partial
+publication, but searches can still see intermediate index states. Generated
+symbol IDs can leave stale documents after full reindexing; verify consistency
+rather than blindly rebuilding. Simultaneous cache misses are not coalesced,
+and cache invalidation does not yet fence in-flight stale writes. Public
+deployment hardening and full-index atomicity remain future work.

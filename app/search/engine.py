@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
 from app.core.clients import elasticsearch_client
 from app.core.config import settings
-from app.db.models import CodeFile, CodeSymbol, Repository
+from app.db.models import CodeFile, CodeSymbol, Repository, RepositorySyncJob
 from app.search.embeddings import (
     EMBEDDING_DIMS,
     build_symbol_embedding_text,
@@ -198,6 +198,9 @@ def index_repository_in_elasticsearch(
     Semantic embeddings are generated in batches.
     """
 
+    if db.get(RepositorySyncJob, repository_id) is not None:
+        raise RuntimeError("Finish pending repository synchronization before full Elasticsearch indexing.")
+
     create_symbol_index()
 
     repository = db.get(
@@ -358,7 +361,7 @@ def delete_paths_from_elasticsearch(
 
     create_symbol_index()
 
-    elasticsearch_client.options(
+    response = elasticsearch_client.options(
         request_timeout=60
     ).delete_by_query(
         index=INDEX_NAME,
@@ -383,6 +386,8 @@ def delete_paths_from_elasticsearch(
         conflicts="proceed",
         refresh=True,
     )
+    if response.get("timed_out") or response.get("failures") or response.get("version_conflicts"):
+        raise RuntimeError("Elasticsearch path deletion was incomplete; retry synchronization.")
 
 
 # ---------------------------------------------------------------------
