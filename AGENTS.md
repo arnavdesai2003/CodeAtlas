@@ -214,7 +214,7 @@ PostgreSQL session advisory locks serialize cooperating sync callers across
 metadata commits; contention returns HTTP 409. Full indexers reject existing
 pending jobs but do not share this lock: never run full indexing concurrently
 with sync. Do not delete pending jobs manually. Recovery is not cross-store
-atomicity and does not fence stale cache refills from in-flight searches.
+atomicity. Stale cache refills are addressed by the subsequent milestone below.
 Older-version failures without a job are not automatically reconstructed.
 
 Ingestion reserves clone directories atomically, builds its response before
@@ -226,5 +226,31 @@ See `docs/sync-recovery.md` for workflows, validation and limitations.
 mocked external services. Live PostgreSQL verified advisory exclusion across
 commit and release on exceptions. Retrieval evaluation reproduced all metrics,
 25 valid cases, hybrid Recall@10 .880 / MRR .499; live corpus not reindexed.
-Next priorities: in-flight stale cache invalidation and coordinated/atomic full
-index rebuilds. No new performance claims for the recovery milestone.
+Next priority at this checkpoint was in-flight stale cache invalidation.
+No new performance claims for the recovery milestone.
+
+## Latest milestone: cache generation fencing (2026-09-28)
+
+Redis Lua reads bind results/misses to a random generation; atomic conditional
+writes reject fills after invalidation. Invalidation rotates the generation
+before best-effort batched cleanup. Strict mode raises on rotation failure;
+cleanup failure does not prevent sync finalization. The sync response count
+reports physical deletions, not logical invalidations. Unknown read generation
+disables caching for that request; normal retrieval and benchmark bypass remain
+unchanged. Tokens have no TTL; random replacements prevent reuse after eviction.
+
+Upgrade all API/indexing/sync processes together: legacy cache clients do not
+participate in this protocol. Old entries expire naturally; do not flush Redis.
+An already-running caller can receive its old result; index publication is still
+not an atomic snapshot. See `docs/cache-consistency.md` and `docs/performance.md`.
+61 offline tests pass, including deterministic stale-fill interleavings, Redis
+outages, metadata eviction, corrupt entries and cleanup failures. Real Redis
+verified Lua behavior and TTL using isolated temporary keys. No ranking/index
+changes; the previous retrieval quality baseline remains applicable.
+Warm-cache before/after comparisons and uncached bypass verification are in
+`docs/performance.md`: all requests succeeded; warm runs had 100% hits and
+uncached had zero. Twenty-worker warm throughput was lower in both after runs;
+do not claim a performance improvement. Dedicated port 8001 server stopped
+after verification; existing port 8000 was not restarted.
+Next priorities: coordinated full-index recovery and atomic publication;
+simultaneous cache-miss coalescing remains a separate performance investigation.

@@ -1,88 +1,118 @@
 import hashlib
 import json
+from dataclasses import dataclass
+from uuid import uuid4
 
 from app.core.clients import redis_client
 from app.core.config import settings
 
 
 CACHE_PREFIX = "codeatlas:search:"
+ENTRY_PREFIX = f"{CACHE_PREFIX}v2:"
+GENERATION_KEY = f"{CACHE_PREFIX}generation:v2"
+
+# A single Redis operation binds the read to its generation. A random token
+# avoids reusing an old generation after metadata eviction or Redis reset.
+_READ_SCRIPT = """
+local generation = redis.call('GET', KEYS[1])
+if not generation then
+    generation = ARGV[1]
+    redis.call('SET', KEYS[1], generation)
+end
+local value = redis.call('GET', ARGV[2] .. generation .. ':' .. ARGV[3])
+return {generation, value}
+"""
+
+# Compare and write atomically: invalidation cannot slip between these steps.
+_WRITE_SCRIPT = """
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+    return 0
+end
+redis.call('SETEX', KEYS[2], ARGV[2], ARGV[3])
+return 1
+"""
 
 
-def build_cache_key(
-    query: str,
-    limit: int,
-) -> str:
-    normalized_query = " ".join(
-        query.lower().strip().split()
-    )
-
-    raw_key = f"{normalized_query}:{limit}"
-
-    digest = hashlib.sha256(
-        raw_key.encode("utf-8")
-    ).hexdigest()
-
-    return f"{CACHE_PREFIX}{digest}"
+@dataclass(frozen=True)
+class CacheLookup:
+    results: list[dict] | None = None
+    generation: str | None = None
 
 
-def get_cached_search(
-    query: str,
-    limit: int,
-) -> list[dict] | None:
-    key = build_cache_key(
-        query=query,
-        limit=limit,
-    )
+def _query_digest(query: str, limit: int) -> str:
+    normalized_query = " ".join(query.lower().strip().split())
+    return hashlib.sha256(f"{normalized_query}:{limit}".encode("utf-8")).hexdigest()
 
+
+def build_cache_key(query: str, limit: int, *, generation: str) -> str:
+    return f"{ENTRY_PREFIX}{generation}:{_query_digest(query, limit)}"
+
+
+def get_cached_search(query: str, limit: int) -> CacheLookup:
     try:
-        cached_value = redis_client.get(key)
-
-        if cached_value is None:
-            return None
-
-        return json.loads(cached_value)
-
+        generation, value = redis_client.eval(
+            _READ_SCRIPT, 1, GENERATION_KEY, uuid4().hex,
+            ENTRY_PREFIX, _query_digest(query, limit),
+        )
     except Exception:
-        # Redis failure should not break search.
-        return None
+        # Unknown generation means retrieval can continue, but cannot cache.
+        return CacheLookup()
+
+    if value is None:
+        return CacheLookup(generation=generation)
+    try:
+        results = json.loads(value)
+        if not isinstance(results, list) or not all(isinstance(item, dict) for item in results):
+            raise ValueError("Invalid cached result shape")
+    except (TypeError, ValueError):
+        return CacheLookup(generation=generation)
+    return CacheLookup(results=results, generation=generation)
 
 
 def set_cached_search(
-    query: str,
-    limit: int,
-    results: list[dict],
-) -> None:
-    key = build_cache_key(
-        query=query,
-        limit=limit,
-    )
-
+    query: str, limit: int, results: list[dict], *, generation: str | None,
+) -> bool:
+    # Never obtain a new token after retrieval: that would admit stale results.
+    if generation is None:
+        return False
     try:
-        redis_client.setex(
-            key,
-            settings.search_cache_ttl,
-            json.dumps(results),
-        )
-
+        return bool(redis_client.eval(
+            _WRITE_SCRIPT, 2, GENERATION_KEY,
+            build_cache_key(query, limit, generation=generation),
+            generation, settings.search_cache_ttl, json.dumps(results),
+        ))
     except Exception:
-        # Elasticsearch results should still be returned
-        # even if Redis is unavailable.
-        pass
+        # Redis failure must not prevent returning retrieved results.
+        return False
+
 
 def invalidate_search_cache(*, strict: bool = False) -> int:
+    """Rotate generation atomically; return the number of old keys cleaned up.
+
+    Correctness relies on rotation, not physical deletion. Strict mode surfaces
+    rotation failures so sync remains retryable. Cleanup is best-effort; old
+    entries retain their original TTL and cannot be served by a newer generation.
+    """
     try:
-        keys = list(
-            redis_client.scan_iter(
-                match=f"{CACHE_PREFIX}*"
-            )
-        )
-
-        if not keys:
-            return 0
-
-        return redis_client.delete(*keys)
-
+        previous = redis_client.getset(GENERATION_KEY, uuid4().hex)
     except Exception:
         if strict:
             raise
         return 0
+
+    if previous is None:
+        return 0
+    deleted = 0
+    batch = []
+    try:
+        for key in redis_client.scan_iter(match=f"{ENTRY_PREFIX}{previous}:*", count=256):
+            batch.append(key)
+            if len(batch) == 256:
+                deleted += redis_client.delete(*batch)
+                batch.clear()
+        if batch:
+            deleted += redis_client.delete(*batch)
+    except Exception:
+        # Logical invalidation already succeeded; cleanup may wait for expiry.
+        pass
+    return deleted

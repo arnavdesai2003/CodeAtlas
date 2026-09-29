@@ -42,23 +42,23 @@ class ServiceTests(unittest.TestCase):
         self.assertIn("elasticsearch_latency_ms", result)
 
     def test_empty_cached_results_are_a_hit(self):
-        with patch.object(service, "get_cached_search", return_value=[]), \
+        with patch.object(service, "get_cached_search", return_value=cache.CacheLookup([], "g")), \
              patch.object(service, "search_code") as search:
             result = service.search_with_cache("q", 10)
         self.assertTrue(result["cache_hit"])
         search.assert_not_called()
 
     def test_miss_searches_and_caches(self):
-        with patch.object(service, "get_cached_search", return_value=None), \
+        with patch.object(service, "get_cached_search", return_value=cache.CacheLookup(generation="g")), \
              patch.object(service, "search_code", return_value=[]) as search, \
              patch.object(service, "set_cached_search") as write:
             result = service.search_with_cache("q", 10)
         self.assertFalse(result["cache_hit"])
         search.assert_called_once_with(query="q", limit=10)
-        write.assert_called_once_with(query="q", limit=10, results=[])
+        write.assert_called_once_with(query="q", limit=10, results=[], generation="g")
 
     def test_engine_failure_is_not_cached(self):
-        with patch.object(service, "get_cached_search", return_value=None), \
+        with patch.object(service, "get_cached_search", return_value=cache.CacheLookup(generation="g")), \
              patch.object(service, "search_code", side_effect=RuntimeError("offline")), \
              patch.object(service, "set_cached_search") as write:
             with self.assertRaises(RuntimeError):
@@ -68,30 +68,31 @@ class ServiceTests(unittest.TestCase):
 
 class CacheTests(unittest.TestCase):
     def test_normalization_and_limit(self):
-        self.assertEqual(cache.build_cache_key(" Q  Test ", 10), cache.build_cache_key("q test", 10))
-        self.assertNotEqual(cache.build_cache_key("q", 10), cache.build_cache_key("q", 5))
+        self.assertEqual(cache.build_cache_key(" Q  Test ", 10, generation="g"), cache.build_cache_key("q test", 10, generation="g"))
+        self.assertNotEqual(cache.build_cache_key("q", 10, generation="g"), cache.build_cache_key("q", 5, generation="g"))
 
     def test_outage_and_corrupt_json_fall_back(self):
         with patch.object(cache, "redis_client") as redis:
-            redis.get.side_effect = ConnectionError()
-            self.assertIsNone(cache.get_cached_search("q", 10))
-            redis.get.side_effect = None
-            redis.get.return_value = "not JSON"
-            self.assertIsNone(cache.get_cached_search("q", 10))
-            redis.setex.side_effect = ConnectionError()
-            cache.set_cached_search("q", 10, [])
+            redis.eval.side_effect = ConnectionError()
+            self.assertIsNone(cache.get_cached_search("q", 10).generation)
+            redis.eval.side_effect = None
+            redis.eval.return_value = ["g", "not JSON"]
+            self.assertIsNone(cache.get_cached_search("q", 10).results)
+            redis.eval.side_effect = ConnectionError()
+            self.assertFalse(cache.set_cached_search("q", 10, [], generation="g"))
 
     def test_invalidation_is_namespaced(self):
         with patch.object(cache, "redis_client") as redis:
-            redis.scan_iter.return_value = ["codeatlas:search:a"]
+            redis.getset.return_value = "old"
+            redis.scan_iter.return_value = ["codeatlas:search:v2:old:a"]
             redis.delete.return_value = 1
             self.assertEqual(cache.invalidate_search_cache(), 1)
-            redis.scan_iter.assert_called_once_with(match="codeatlas:search:*")
-            redis.delete.assert_called_once_with("codeatlas:search:a")
+            redis.scan_iter.assert_called_once_with(match="codeatlas:search:v2:old:*", count=256)
+            redis.delete.assert_called_once_with("codeatlas:search:v2:old:a")
 
     def test_strict_invalidation_surfaces_failure(self):
         with patch.object(cache, "redis_client") as redis:
-            redis.scan_iter.side_effect = ConnectionError("offline")
+            redis.getset.side_effect = ConnectionError("offline")
             self.assertEqual(cache.invalidate_search_cache(), 0)
             with self.assertRaises(ConnectionError):
                 cache.invalidate_search_cache(strict=True)

@@ -261,3 +261,48 @@ failure between PostgreSQL commit and Elasticsearch update. Avoid further
 ranking changes to chase the remaining hardware/transport latency. Longer
 duration performance trials and more representative queries are needed before
 production concurrency recommendations.
+
+## Cache generation fencing (2026-09-28)
+
+Correctness change: reject in-flight stale cache fills after invalidation. See
+[cache consistency](cache-consistency.md). Same Apple Silicon host, Python 3.13,
+one Uvicorn worker on loopback port 8001, no access log/proxy headers, automatic
+embedding settings and offline model loading. Before server used the previous
+commit; after server loaded the generation implementation. Each run used the
+existing ten queries, limit 10, 200 requests per level, excluded warm-up and
+pooled HTTP client. Redis was not flushed. Port 8000 was not restarted.
+
+### Warm-cache HTTP only
+
+All 800 requests in each of three runs succeeded with 100% cache hits.
+
+| Workers | Before req/s | After req/s | After repeat req/s | Before p95 ms | After p95 ms | Repeat p95 ms |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 67.23 | 66.62 | 66.40 | 15.986 | 16.298 | 16.292 |
+| 5 | 355.39 | 343.87 | 359.17 | 17.711 | 20.953 | 19.422 |
+| 10 | 675.63 | 671.40 | 757.20 | 27.436 | 20.768 | 19.444 |
+| 20 | 1114.30 | 895.34 | 984.56 | 31.396 | 46.797 | 26.922 |
+
+Warm hits still make one Redis round trip, now running an atomic Lua read
+instead of GET. At twenty workers both after runs have lower throughput than
+the single before run (about 12–20%); tail latency varies substantially. This
+is a possible cost, not evidence of a sustained regression or an optimization.
+The correctness fix is retained. Longer alternating trials are needed to
+attribute the difference to Lua rather than scheduling/host variability.
+
+### Uncached HTTP verification
+
+All 800 requests succeeded, zero cache hits, acknowledged bypass. Client latency
+is distinct from server search time. No retrieval/indexing changes or new
+quality claims; the previous full evaluation remains the quality baseline.
+
+| Workers | Successful req/s | Client avg ms | Client p95 ms | Client p99 ms | Server search avg ms |
+|---|---:|---:|---:|---:|---:|
+| 1 | 48.05 | 20.713 | 32.922 | 34.330 | 19.248 |
+| 5 | 141.47 | 34.966 | 49.025 | 52.369 | 32.493 |
+| 10 | 143.57 | 69.067 | 90.224 | 96.016 | 65.633 |
+| 20 | 142.89 | 138.095 | 230.551 | 244.519 | 132.308 |
+
+Throughput flattens after five workers in this short run; it does not establish
+a new capacity ceiling. Cached results above must not be compared as uncached
+retrieval throughput. The dedicated benchmark server was stopped afterward.

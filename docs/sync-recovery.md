@@ -81,9 +81,13 @@ ingestion does not automatically delete or adopt that directory.
 ## Guarantees and remaining limits
 
 This is replayable recovery, not an atomic cross-store snapshot. Queries can
-observe missing/mixed documents during a partial Elasticsearch update. An
-in-flight search can refill a stale Redis key after invalidation; TTL still
-bounds ordinary stale entries. Generation-based invalidation is future work.
+observe missing/mixed documents during a partial Elasticsearch update.
+Generation-based cache invalidation now rejects fills from searches started
+before invalidation; an already-running caller can still receive its old result.
+See [cache consistency](cache-consistency.md). Strict invalidation requires
+successful generation rotation; physical cleanup is best-effort. The response
+field `cache_entries_invalidated` counts physically deleted keys, not all
+logically invalidated entries, and may be zero after successful rotation.
 No availability or exactly-once delivery guarantee is claimed.
 
 The lock protects cooperating sync callers only. A broken lock connection or

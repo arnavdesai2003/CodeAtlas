@@ -1,6 +1,7 @@
 from time import perf_counter
 
 from app.search.cache import (
+    CacheLookup,
     get_cached_search,
     set_cached_search,
 )
@@ -15,10 +16,11 @@ def search_with_cache(
 ) -> dict:
     total_start = perf_counter()
 
-    cached_results = None if bypass_cache else get_cached_search(
+    lookup = CacheLookup() if bypass_cache else get_cached_search(
         query=query,
         limit=limit,
     )
+    cached_results = lookup.results
 
     if cached_results is not None:
         total_latency_ms = (
@@ -45,11 +47,12 @@ def search_with_cache(
         perf_counter() - elasticsearch_start
     ) * 1000
 
-    if not bypass_cache:
+    if not bypass_cache and lookup.generation is not None:
         set_cached_search(
             query=query,
             limit=limit,
             results=results,
+            generation=lookup.generation,
         )
 
     total_latency_ms = (

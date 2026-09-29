@@ -82,6 +82,12 @@ the default API. Test code is excluded unless the query indicates test intent.
 Search requires an existing symbol index and never creates one. Run the
 indexing workflow before searching a new installation.
 
+Cache reads capture a generation token; fills are accepted only while that
+generation remains current. Invalidation rotates the token atomically, so an
+older in-flight search cannot refill the current cache. Redis failures still
+fall back to retrieval. See [cache consistency](docs/cache-consistency.md) for
+rollout requirements and the remaining snapshot limitations.
+
 Responses include source code, symbol location, component scores/ranks,
 `cache_hit` and timing fields. `search_latency_ms` covers the search service;
 the legacy name `elasticsearch_latency_ms` covers the entire hybrid engine,
@@ -193,6 +199,5 @@ Full reindexing and cross-store incremental updates are not transactional across
 PostgreSQL and Elasticsearch. Pending sync jobs support retry after partial
 publication, but searches can still see intermediate index states. Generated
 symbol IDs can leave stale documents after full reindexing; verify consistency
-rather than blindly rebuilding. Simultaneous cache misses are not coalesced,
-and cache invalidation does not yet fence in-flight stale writes. Public
+rather than blindly rebuilding. Simultaneous cache misses are not coalesced. Public
 deployment hardening and full-index atomicity remain future work.
