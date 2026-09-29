@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
@@ -13,6 +14,8 @@ class Settings(BaseSettings):
     github_webhook_secret: str = ""
     hybrid_semantic_weight: float = 0.60
     benchmark_cache_bypass_enabled: bool = False
+    embedding_device: str | None = None
+    torch_num_threads: int | None = Field(default=None, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",

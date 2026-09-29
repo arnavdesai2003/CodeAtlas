@@ -170,3 +170,31 @@ zero hits. Beyond ten workers adds at most 2.4% throughput in these two runs
 while p95 roughly doubles. Details and limitations are in `docs/performance.md`.
 Temporary benchmark server on 8001 is stopped when work finishes; port 8000
 was not restarted. No infrastructure, ranking weights or candidate sizes changed.
+
+## Latest milestone: embedding execution (2026-09-28)
+
+Optional `EMBEDDING_DEVICE` and `TORCH_NUM_THREADS` settings added. Both default
+to unset, preserving automatic device selection and existing PyTorch threads.
+The thread setting is process-wide, including the optional reranker; restart
+to change either setting. Model cold initialization is serialized to prevent
+duplicate loading, but inference remains concurrent. No embedding cache added.
+
+Measured opt-in `EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1` on this Apple Silicon
+machine using unchanged uncached HTTP workload. Two runs at ten workers:
+171.88/170.79 req/s, p95 69.113/74.402 ms; bracketing automatic/MPS controls:
+145.35/153.78 req/s, p95 89.297/80.308 ms. All four runs 800 successes, zero
+cache hits. No reliable single-worker HTTP gain; twenty workers adds waiting.
+Do not generalize this preference to other hardware or batch indexing.
+Default deployment and `.env` remain unchanged. Details: `docs/performance.md`.
+
+New `scripts.benchmark_embeddings` measures only embedding inference with
+explicit device/thread settings; it is not HTTP or direct-engine performance.
+Its optional semaphore experiment showed poor tail fairness and is not used
+in application inference. Use matched unsandboxed HTTP runs for comparisons:
+the sandbox cannot access MPS even though host PyTorch can.
+
+28 offline tests pass. CPU/one-thread multi-repository evaluation reproduced
+all metrics, 25 valid cases, hybrid Recall@10 .880 and MRR .499. No model,
+embedding dimensions, candidate sizing, weights, corpus or index changes.
+Next engineering priority: ingestion and incremental-sync failure/recovery
+coverage, especially cross-store partial commits, before modifying those paths.

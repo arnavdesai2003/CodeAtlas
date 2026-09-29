@@ -1,15 +1,32 @@
 from functools import lru_cache
+from threading import Lock
 
 from sentence_transformers import SentenceTransformer
+import torch
+
+from app.core.config import settings
 
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 EMBEDDING_DIMS = 384
+_model_init_lock = Lock()
 
 
 @lru_cache(maxsize=1)
+def _load_embedding_model() -> SentenceTransformer:
+    # Optional process-wide setting: apply before model inference begins.
+    if settings.torch_num_threads is not None:
+        torch.set_num_threads(settings.torch_num_threads)
+    if settings.embedding_device is None:
+        return SentenceTransformer(MODEL_NAME)
+    return SentenceTransformer(MODEL_NAME, device=settings.embedding_device)
+
+
 def get_embedding_model() -> SentenceTransformer:
-    return SentenceTransformer(MODEL_NAME)
+    # lru_cache alone can initialize multiple models on concurrent cold misses.
+    # Serialize initialization, not inference, including the global thread setup.
+    with _model_init_lock:
+        return _load_embedding_model()
 
 
 def embed_text(text: str) -> list[float]:

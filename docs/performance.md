@@ -160,3 +160,104 @@ workload, 5–10 concurrent requests is the useful operating region; twenty
 mostly increases waiting. Do not describe the highest observed 151.47 req/s
 as a guaranteed sustained maximum. The isolated benchmark server is stopped
 after measurement; the existing port 8000 API is left untouched.
+
+## Embedding execution experiment (completed 2026-09-28)
+
+Investigated the remaining embedding bottleneck using the same model, corpus,
+ten queries and HTTP methodology. No ranking, candidate count, indexing, Redis
+or Elasticsearch changes. Added optional `EMBEDDING_DEVICE` and
+`TORCH_NUM_THREADS` settings; unset preserves automatic device selection and
+PyTorch's existing thread setting. The latter affects PyTorch process-wide.
+Added a model-initialization lock because `lru_cache` alone can construct
+multiple models on concurrent cold requests. The lock does not cover inference.
+
+### Uncached HTTP comparison
+
+Fresh automatic/MPS control → CPU/one-thread → CPU repeat → automatic/MPS
+repeat, run sequentially on the isolated loopback API at port 8001. Server
+processes were restarted between configurations; one Uvicorn worker, no reload,
+access logging or proxy headers. Each run: 800 successful HTTP 200 responses,
+zero failures, zero cache hits, bypass confirmed. Warm-up excluded.
+
+Throughput in successful requests/second:
+
+| Workers | Auto/MPS control | CPU, 1 thread | CPU repeat | Auto/MPS repeat |
+|---|---:|---:|---:|---:|
+| 1 | 47.30 | 46.39 | 48.71 | 46.00 |
+| 5 | 134.10 | 156.93 | 163.18 | 145.93 |
+| 10 | 145.35 | 171.88 | 170.79 | 153.78 |
+| 20 | 140.32 | 162.60 | 165.22 | 147.11 |
+
+Client-observed p95 latency in milliseconds:
+
+| Workers | Auto/MPS control | CPU, 1 thread | CPU repeat | Auto/MPS repeat |
+|---|---:|---:|---:|---:|
+| 1 | 33.140 | 32.943 | 32.211 | 32.766 |
+| 5 | 55.358 | 41.529 | 38.902 | 45.975 |
+| 10 | 89.297 | 69.113 | 74.402 | 80.308 |
+| 20 | 236.639 | 145.456 | 142.379 | 165.412 |
+
+The CPU configuration consistently improves concurrent throughput/tails here;
+at ten workers it achieves about 11–18% more throughput than the two controls.
+Single-worker HTTP performance is effectively unchanged within these runs.
+Twenty workers still add waiting rather than throughput; ten remains a useful
+operating point for this short workload. No sustained-capacity claim is made.
+Automatic selection remains the application default: these results do not
+establish CPU as preferable on other machines, for long queries, or for batch
+indexing. The existing port 8000 API and `.env` were not changed.
+
+Reproduce the candidate server (client benchmark command remains unchanged):
+
+```sh
+EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 \
+  BENCHMARK_CACHE_BYPASS_ENABLED=true APP_ENV=development HF_HUB_OFFLINE=1 \
+  .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 \
+  --workers 1 --no-access-log --no-proxy-headers
+.venv/bin/python -m scripts.benchmark_api --uncached --base-url http://127.0.0.1:8001
+```
+
+### Embedding-only experiments and rejected limiter
+
+`scripts.benchmark_embeddings` loads a model on the requested device in a fresh
+process, warms all ten queries, then measures 200 calls at 1/5/10/20 workers.
+It includes optional semaphore wait and excludes executor queue wait. Numerical
+comparison occurs after measurement against serial references on the same
+device; all observed maximum absolute differences were zero. This is not a
+cross-device equivalence proof or an HTTP/retrieval-quality benchmark.
+
+CPU/one-thread initially measured 428.44 req/s at one worker and 258.32 at
+twenty; CPU/two-thread measured 394.01 and 259.79. Automatic MPS/four-thread
+measured 270.34 and 206.96. Initial CPU runs were sandboxed; MPS required
+unsandboxed accelerator access. Use the HTTP controls above for the matched
+environment comparison rather than interpreting these as definitive device
+speed ratios.
+
+An unsandboxed CPU/one-thread verification then measured 438.17/351.01/258.77/
+260.43 embedding calls/sec at 1/5/10/20 workers, with p95 2.499/16.224/43.973/
+85.993 ms and zero numerical differences from serial references. This confirms
+the CPU diagnostic trend without relying solely on sandboxed measurements.
+
+Serializing inference with a semaphore improved aggregate embedding-only
+throughput but caused severe tail waiting: at twenty workers CPU/one-thread
+measured 433.49 req/s with p95 437.042 ms, and MPS measured 289.05 req/s with
+p95 654.801 ms. Short calls repeatedly reacquire the semaphore while other
+threads wait. The limiter remains diagnostic-only and was **not** added to
+application inference. HTTP would interleave other work, but these tail results
+do not justify imposing a simple semaphore on production search.
+
+### Quality and checks
+
+`EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 HF_HUB_OFFLINE=1 python -m
+scripts.evaluate_multirepo` completed with 25 valid / 0 invalid cases. Every
+metric for BM25, semantic, hybrid and reranked retrieval matched the previously
+recorded table exactly: hybrid Recall@10 .880, MRR .499. Existing index vectors
+were reused; no reindexing. The unit suite now has 28 passing offline tests,
+including default configuration preservation, explicit device/thread setup,
+normalized encoding, validation of thread count and single model initialization
+under simultaneous cold calls.
+
+Next priorities: expand ingestion/incremental-sync recovery tests, especially
+failure between PostgreSQL commit and Elasticsearch update. Avoid further
+ranking changes to chase the remaining hardware/transport latency. Longer
+duration performance trials and more representative queries are needed before
+production concurrency recommendations.

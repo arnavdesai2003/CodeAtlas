@@ -79,6 +79,37 @@ Responses include source code, symbol location, component scores/ranks,
 the legacy name `elasticsearch_latency_ms` covers the entire hybrid engine,
 including embedding and fusion. Neither is client end-to-end latency.
 
+## Embedding execution settings
+
+Device selection is automatic by default. To reproduce the measured CPU
+configuration on this Apple Silicon development machine, start the API with:
+
+```sh
+EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 \
+  .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+These are opt-in process settings, applied when the embedding model first loads;
+restart to change them. `TORCH_NUM_THREADS` controls PyTorch intra-op threads
+process-wide, including other PyTorch models such as the optional reranker.
+Model initialization is serialized across cold requests, while inference remains
+concurrent. No query embeddings are cached by this configuration. Keep automatic
+selection on other hardware until you measure alternatives. CPU inference was
+faster for concurrent short-query HTTP workloads here, but did not reliably
+improve single-worker HTTP latency. Batch-indexing performance was not measured.
+
+For isolated embedding diagnostics (not HTTP or retrieval benchmarks):
+
+```sh
+HF_HUB_OFFLINE=1 .venv/bin/python -m scripts.benchmark_embeddings --device cpu --torch-threads 1
+HF_HUB_OFFLINE=1 .venv/bin/python -m scripts.benchmark_embeddings --device mps
+```
+
+Run each configuration in a fresh process and one load test at a time.
+`--max-inflight 1` is an experimental diagnostic option only: serialized
+inference showed poor tail latency under the thread-pool workload and is not
+implemented in the application.
+
 ## Tests and retrieval quality
 
 ```sh
