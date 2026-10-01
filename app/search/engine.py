@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 from concurrent.futures import ThreadPoolExecutor
 from app.core.clients import elasticsearch_client
 from app.core.config import settings
-from app.db.models import CodeFile, CodeSymbol, Repository, RepositorySyncJob
+from app.db.models import (
+    CodeFile, CodeSymbol, Repository, RepositorySyncJob, RepositoryFullIndexJob,
+)
+from app.indexer.locking import repository_sync_lock
+from app.search.cache import invalidate_search_cache
 from app.search.embeddings import (
     EMBEDDING_DIMS,
     build_symbol_embedding_text,
@@ -192,6 +196,42 @@ def index_repository_in_elasticsearch(
     db: Session,
     repository_id: int,
 ) -> dict:
+    with repository_sync_lock(db, repository_id):
+        try:
+            return _publish_repository_index(db, repository_id)
+        except Exception:
+            db.rollback()
+            raise
+
+
+def _publish_repository_index(db: Session, repository_id: int) -> dict:
+    if db.get(RepositorySyncJob, repository_id) is not None:
+        raise RuntimeError("Finish pending repository synchronization before full Elasticsearch indexing.")
+    repository = db.get(Repository, repository_id)
+    if repository is None:
+        raise ValueError(f"Repository {repository_id} does not exist.")
+    job = db.get(RepositoryFullIndexJob, repository_id)
+    resumed = job is not None
+    if job is None:
+        job = RepositoryFullIndexJob(repository_id=repository_id, stats={})
+        db.add(job)
+        db.commit()
+    create_symbol_index()
+    response = elasticsearch_client.options(request_timeout=60).delete_by_query(
+        index=INDEX_NAME, query={"term": {"repository_id": repository_id}},
+        conflicts="proceed", refresh=True,
+    )
+    if response.get("timed_out") or response.get("failures") or response.get("version_conflicts"):
+        raise RuntimeError("Full Elasticsearch deletion was incomplete; retry full indexing.")
+    result = _write_repository_index(db, repository_id)
+    result["cache_entries_invalidated"] = invalidate_search_cache(strict=True)
+    result["resumed"] = resumed
+    db.delete(job)
+    db.commit()
+    return result
+
+
+def _write_repository_index(db: Session, repository_id: int) -> dict:
     """
     Index all parsed symbols from one repository.
 
@@ -323,12 +363,15 @@ def index_repository_in_elasticsearch(
     )
 
     if actions:
-        bulk(
+        succeeded, errors = bulk(
             elasticsearch_client.options(
                 request_timeout=60
             ),
             actions,
         )
+
+        if errors or succeeded != len(actions):
+            raise RuntimeError("Full Elasticsearch bulk indexing was incomplete; retry full indexing.")
 
         elasticsearch_client.indices.refresh(
             index=INDEX_NAME

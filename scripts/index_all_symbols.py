@@ -20,6 +20,8 @@ def main():
 
         total_symbols = 0
 
+        failures = 0
+
         for repository in repositories:
             print("=" * 70)
             print(
@@ -39,6 +41,8 @@ def main():
 
                 total_symbols += symbol_count
 
+                print("Publication pending; run full Elasticsearch indexing.")
+
                 print(
                     f"{repository.name:<20} "
                     f"{symbol_count:>6} symbols"
@@ -55,6 +59,7 @@ def main():
                 )
 
             except Exception as exc:
+                failures += 1
                 db.rollback()
 
                 print(
@@ -72,6 +77,9 @@ def main():
             f"Total symbols indexed: "
             f"{total_symbols}"
         )
+
+        if failures:
+            raise SystemExit(f"{failures} repositories failed; retry pending work.")
 
     finally:
         db.close()

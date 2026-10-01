@@ -254,3 +254,31 @@ do not claim a performance improvement. Dedicated port 8001 server stopped
 after verification; existing port 8000 was not restarted.
 Next priorities: coordinated full-index recovery and atomic publication;
 simultaneous cache-miss coalescing remains a separate performance investigation.
+
+
+## Latest milestone: coordinated full-index recovery (2026-10-01)
+
+Full symbol/Elasticsearch indexers share the incremental-sync PostgreSQL advisory
+lock via `app/indexer/locking.py`. `repository_full_index_jobs` is an additive
+table created by startup; it was created in the local database during verification.
+Symbol replacement and its job commit together; retries preserve committed IDs
+without reparsing. Standalone full Elasticsearch indexing also journals work
+before writes. Sync refuses pending full work; full indexing refuses pending sync.
+Full publication deletes all repository documents, including stale symbol IDs,
+then indexes the committed snapshot, strictly rotates cache generation and removes
+the job. Empty snapshots still delete/invalidate. Failures leave replayable work.
+Full rebuild does not advance the Git checkpoint or discover new files. Batch
+failures return nonzero. Upgrade all writer processes together; legacy writers
+are not coordinated. See `docs/full-index-recovery.md`.
+
+73 offline tests pass. Live PostgreSQL verified lock exclusion across commit and
+release after exceptions. An isolated real Elasticsearch/Redis smoke test with
+SQLite metadata and deterministic vectors verified stale IDs, repository isolation,
+retry after injected invalidation failure and empty-snapshot replacement; test
+artifacts were removed. Live evaluation reproduced every baseline metric with 25
+valid cases, hybrid Recall@10 .880 and MRR .499. The live corpus was not rebuilt.
+Docker Desktop and existing containers were started; API processes were not
+restarted. No benchmark or new performance claim. Publication remains in place
+and can expose missing/mixed documents. Next priority: staging-index recovery
+and atomic publication, including existing physical-index migration and consistent
+parallel retrieval branches. Cache-miss coalescing remains separate.

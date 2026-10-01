@@ -77,6 +77,16 @@ class RepositorySyncJob(Base):
     stats: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
+class RepositoryFullIndexJob(Base):
+    """Committed symbol snapshot awaiting replayable full publication."""
+
+    __tablename__ = "repository_full_index_jobs"
+    repository_id: Mapped[int] = mapped_column(
+        ForeignKey("repositories.id", ondelete="CASCADE"), primary_key=True,
+    )
+    stats: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
 class CodeFile(Base):
     __tablename__ = "code_files"
 

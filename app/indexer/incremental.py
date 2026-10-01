@@ -1,8 +1,7 @@
 from pathlib import Path
-from contextlib import contextmanager
 import subprocess
 
-from sqlalchemy import delete, text
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -10,7 +9,9 @@ from app.db.models import (
     CodeSymbol,
     Repository,
     RepositorySyncJob,
+    RepositoryFullIndexJob,
 )
+from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.repository import (
     LANGUAGE_BY_EXTENSION,
@@ -79,47 +80,6 @@ def parse_git_diff(output: str) -> list[dict]:
     return changes
 
 
-class RepositorySyncInProgress(RuntimeError):
-    pass
-
-
-@contextmanager
-def repository_sync_lock(db: Session, repository_id: int):
-    """Session advisory lock survives the metadata transaction's commit.
-
-    SQLite is used only by single-threaded offline transaction tests. Production
-    PostgreSQL callers share this lock across processes and webhook/API paths.
-    """
-    bind = db.get_bind()
-    if bind.dialect.name == "sqlite":
-        yield
-        return
-    if bind.dialect.name != "postgresql":
-        raise RuntimeError("Repository synchronization requires PostgreSQL.")
-    params = {"namespace": 0x4341544C, "repository_id": repository_id}
-    with bind.connect() as connection:
-        try:
-            acquired = connection.execute(text(
-                "SELECT pg_try_advisory_lock(:namespace, :repository_id)"
-            ), params).scalar_one()
-        except Exception:
-            connection.invalidate()
-            raise
-        if not acquired:
-            raise RepositorySyncInProgress("Repository synchronization is already in progress.")
-        try:
-            yield
-        finally:
-            try:
-                connection.execute(text(
-                    "SELECT pg_advisory_unlock(:namespace, :repository_id)"
-                ), params)
-            except Exception:
-                # Never return a connection with a session lock to the pool.
-                connection.invalidate()
-                raise
-
-
 def sync_repository(db: Session, repository_id: int) -> dict:
     with repository_sync_lock(db, repository_id):
         try:
@@ -165,6 +125,9 @@ def _sync_repository(
         raise ValueError(
             f"Repository {repository_id} does not exist."
         )
+
+    if db.get(RepositoryFullIndexJob, repository_id) is not None:
+        raise RuntimeError("Finish pending full Elasticsearch indexing before synchronization.")
 
     pending = db.get(RepositorySyncJob, repository_id)
     if pending is not None:

@@ -18,6 +18,8 @@ def main():
 
         total_documents = 0
 
+        failures = 0
+
         for repository in repositories:
             print("=" * 70)
             print(
@@ -43,6 +45,7 @@ def main():
                 )
 
             except Exception as exc:
+                failures += 1
                 print(
                     f"FAILED: {repository.name}"
                 )
@@ -58,6 +61,9 @@ def main():
             f"Total Elasticsearch documents indexed: "
             f"{total_documents}"
         )
+
+        if failures:
+            raise SystemExit(f"{failures} repositories failed; retry pending work.")
 
     finally:
         db.close()

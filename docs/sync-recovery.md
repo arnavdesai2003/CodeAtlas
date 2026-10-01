@@ -59,10 +59,10 @@ FROM repository_sync_jobs;
 ```
 
 Do not delete jobs manually to clear errors: they are recovery records. Full
-symbol/Elasticsearch indexers reject repositories with pending jobs. **Do not
-run full indexing concurrently with sync**: full-index workflows do not share
-the sync lock, and their preflight check cannot prevent a job from being
-created after that check. Do not edit generated clones.
+symbol/Elasticsearch indexers reject repositories with pending sync jobs and now
+share the same advisory lock. Sync rejects pending full-index jobs before Git
+operations. See [full-index recovery](full-index-recovery.md). Upgrade all writer
+processes together; older processes do not participate in this coordination.
 
 ## Ingestion cleanup
 
@@ -90,8 +90,8 @@ field `cache_entries_invalidated` counts physically deleted keys, not all
 logically invalidated entries, and may be zero after successful rotation.
 No availability or exactly-once delivery guarantee is claimed.
 
-The lock protects cooperating sync callers only. A broken lock connection or
-an external/full-index writer is not fenced out by Elasticsearch. The metadata
+The lock protects cooperating sync and full-index callers. A broken lock connection or
+an external or legacy writer is not fenced out by Elasticsearch. The metadata
 checkpoint retains its historical ingestion meaning until initial symbol and
 Elasticsearch indexing completes. Earlier-version failures that advanced a
 checkpoint without a job need explicit reconciliation.

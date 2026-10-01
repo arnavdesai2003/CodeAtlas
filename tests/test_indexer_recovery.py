@@ -18,7 +18,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.db.database import Base
-from app.db.models import CodeFile, CodeSymbol, Repository, RepositorySyncJob
+from app.db.models import (
+    CodeFile, CodeSymbol, Repository, RepositorySyncJob, RepositoryFullIndexJob,
+)
 from app.indexer import incremental, repository
 from app.indexer.symbols import index_repository_symbols
 from app.search import engine as search_engine
@@ -70,6 +72,145 @@ class IndexerRecoveryTests(unittest.TestCase):
         self.index = patch.object(incremental, "index_files_in_elasticsearch", return_value=1).start()
         self.invalidate = patch.object(incremental, "invalidate_search_cache", return_value=2).start()
         self.addCleanup(patch.stopall)
+
+    def prepare_full(self):
+        with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root):
+            return index_repository_symbols(self.db, self.repo_id)
+
+    def test_full_symbol_snapshot_is_durable_and_retry_does_not_reparse(self):
+        result = self.prepare_full()
+        self.assertTrue(result["publication_pending"])
+        before = [(s.id, s.name) for s in self.db.query(CodeSymbol)]
+        (self.path / "sample.py").write_text("def later(): pass")
+        with self.sessions() as retry, patch("app.indexer.symbols.parse_python_source") as parse:
+            result = index_repository_symbols(retry, self.repo_id)
+            self.assertTrue(result["resumed"])
+            parse.assert_not_called()
+            self.assertEqual(before, [(s.id, s.name) for s in retry.query(CodeSymbol)])
+
+    def test_full_symbol_parse_failure_rolls_back_entire_snapshot(self):
+        with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root), \
+             patch("app.indexer.symbols.parse_python_source", side_effect=ValueError("parse")):
+            with self.assertRaises(ValueError):
+                index_repository_symbols(self.db, self.repo_id)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
+        self.assertIsNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_full_snapshot_clears_symbols_for_missing_files(self):
+        (self.path / "sample.py").unlink()
+        self.assertEqual(self.prepare_full()["symbols_indexed"], 0)
+        self.assertEqual(self.db.query(CodeSymbol).count(), 0)
+        self.assertIsNotNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_sync_refuses_pending_full_publication_before_git(self):
+        self.prepare_full()
+        with self.assertRaisesRegex(RuntimeError, "pending full"):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.git.assert_not_called()
+
+    def test_full_publication_failure_retries_committed_snapshot_in_new_session(self):
+        self.prepare_full()
+        with patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "_write_repository_index", side_effect=RuntimeError("bulk")) as write, \
+             patch.object(search_engine, "invalidate_search_cache", return_value=0) as invalidate:
+            es.options.return_value.delete_by_query.return_value = {}
+            with self.assertRaises(RuntimeError):
+                search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
+            invalidate.assert_not_called()
+            with self.sessions() as retry:
+                self.assertIsNotNone(retry.get(RepositoryFullIndexJob, self.repo_id))
+                write.side_effect = None
+                write.return_value = {"symbols_indexed": 1}
+                result = search_engine.index_repository_in_elasticsearch(retry, self.repo_id)
+                self.assertTrue(result["resumed"])
+                self.assertIsNone(retry.get(RepositoryFullIndexJob, self.repo_id))
+                self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "old")
+            self.assertEqual(es.options.return_value.delete_by_query.call_count, 2)
+            self.assertEqual(es.options.return_value.delete_by_query.call_args.kwargs["query"],
+                             {"term": {"repository_id": self.repo_id}})
+            invalidate.assert_called_once_with(strict=True)
+
+    def test_full_publication_incomplete_delete_keeps_job_without_bulk(self):
+        for response in ({"timed_out": True}, {"failures": ["error"]}, {"version_conflicts": 1}):
+            with self.subTest(response=response), patch.object(search_engine, "create_symbol_index"), \
+                 patch.object(search_engine, "elasticsearch_client") as es, \
+                 patch.object(search_engine, "_write_repository_index") as write:
+                es.options.return_value.delete_by_query.return_value = response
+                with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                    search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
+                write.assert_not_called()
+                self.assertIsNotNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_full_publication_cache_and_final_commit_failures_keep_job(self):
+        self.prepare_full()
+        with patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "_write_repository_index", return_value={"symbols_indexed": 1}), \
+             patch.object(search_engine, "invalidate_search_cache", side_effect=RuntimeError("Redis")) as invalidate:
+            es.options.return_value.delete_by_query.return_value = {}
+            with self.assertRaises(RuntimeError):
+                search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
+            self.assertIsNotNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+            invalidate.side_effect = None
+            with patch.object(self.db, "commit", side_effect=RuntimeError("commit")):
+                with self.assertRaises(RuntimeError):
+                    search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
+            with self.sessions() as verify:
+                self.assertIsNotNone(verify.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_full_preparation_commit_failure_preserves_old_symbols(self):
+        with patch.object(self.db, "commit", side_effect=RuntimeError("commit")):
+            with self.assertRaises(RuntimeError):
+                self.prepare_full()
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
+        self.assertIsNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_empty_full_snapshot_still_deletes_and_invalidates(self):
+        (self.path / "sample.py").unlink()
+        self.prepare_full()
+        with patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "embed_texts") as embed, \
+             patch.object(search_engine, "invalidate_search_cache", return_value=0) as invalidate:
+            es.options.return_value.delete_by_query.return_value = {}
+            result = search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
+            self.assertEqual(result["symbols_indexed"], 0)
+            es.options.return_value.delete_by_query.assert_called_once()
+            embed.assert_not_called()
+            invalidate.assert_called_once_with(strict=True)
+            self.assertIsNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_incomplete_full_bulk_keeps_job_without_invalidating(self):
+        self.prepare_full()
+        with patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "embed_texts", return_value=[[0.0] * 384]), \
+             patch.object(search_engine, "bulk", return_value=(0, [])), \
+             patch.object(search_engine, "invalidate_search_cache") as invalidate:
+            es.options.return_value.delete_by_query.return_value = {}
+            with self.assertRaisesRegex(RuntimeError, "bulk indexing was incomplete"):
+                search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
+            invalidate.assert_not_called()
+            self.assertIsNotNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
+
+    def test_standalone_full_job_blocks_symbol_replacement(self):
+        self.db.add(RepositoryFullIndexJob(repository_id=self.repo_id, stats={}))
+        self.db.commit()
+        with self.assertRaisesRegex(RuntimeError, "pending full"):
+            self.prepare_full()
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
+
+    def test_full_writers_acquire_shared_lock_before_preflight(self):
+        from app.indexer import symbols
+        for module, operation in ((symbols, symbols.index_repository_symbols),
+                                  (search_engine, search_engine.index_repository_in_elasticsearch)):
+            with self.subTest(operation=operation.__name__), \
+                 patch.object(module, "repository_sync_lock", side_effect=incremental.RepositorySyncInProgress("busy")), \
+                 patch.object(self.db, "get") as get:
+                with self.assertRaises(incremental.RepositorySyncInProgress):
+                    operation(self.db, self.repo_id)
+                get.assert_not_called()
 
     def test_index_failure_keeps_checkpoint_retryable(self):
         self.index.side_effect = RuntimeError("Elasticsearch unavailable")
