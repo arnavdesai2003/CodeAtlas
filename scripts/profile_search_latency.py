@@ -4,10 +4,9 @@ from time import perf_counter
 from app.core.clients import elasticsearch_client
 from app.search.embeddings import embed_text
 from app.search.engine import (
-    INDEX_NAME,
+    resolve_search_index,
     _format_hits,
     _min_max_normalize,
-    create_symbol_index,
     query_has_test_intent,
 )
 
@@ -41,7 +40,7 @@ def print_stats(name, values):
     )
 
 
-def bm25_only(query, limit=40):
+def bm25_only(query, limit=40, *, index_name=None):
     lexical_query = {
         "multi_match": {
             "query": query,
@@ -75,7 +74,7 @@ def bm25_only(query, limit=40):
         elasticsearch_client
         .options(request_timeout=60)
         .search(
-            index=INDEX_NAME,
+            index=index_name or resolve_search_index(),
             size=limit,
             query=final_query,
         )
@@ -90,6 +89,8 @@ def vector_only(
     query,
     query_vector,
     limit=40,
+    *,
+    index_name=None,
 ):
     knn_query = {
         "field": "embedding",
@@ -112,7 +113,7 @@ def vector_only(
         elasticsearch_client
         .options(request_timeout=60)
         .search(
-            index=INDEX_NAME,
+            index=index_name or resolve_search_index(),
             size=limit,
             knn=knn_query,
         )
@@ -194,15 +195,16 @@ def fuse(
 
 
 def main():
-    create_symbol_index()
+    index_name = resolve_search_index()
 
     # Warm model + Elasticsearch.
     for _ in range(2):
         vector = embed_text(QUERIES[0])
-        bm25_only(QUERIES[0])
+        bm25_only(QUERIES[0], index_name=index_name)
         vector_only(
             QUERIES[0],
             vector,
+            index_name=index_name,
         )
 
     embedding_times = []
@@ -213,6 +215,7 @@ def main():
 
     for query in QUERIES * 4:
         total_start = perf_counter()
+        index_name = resolve_search_index()
 
         start = perf_counter()
         vector = embed_text(query)
@@ -221,7 +224,7 @@ def main():
         )
 
         start = perf_counter()
-        bm25_results = bm25_only(query)
+        bm25_results = bm25_only(query, index_name=index_name)
         bm25_times.append(
             (perf_counter() - start) * 1000
         )
@@ -230,6 +233,7 @@ def main():
         semantic_results = vector_only(
             query,
             vector,
+            index_name=index_name,
         )
         vector_times.append(
             (perf_counter() - start) * 1000

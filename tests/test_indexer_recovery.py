@@ -23,7 +23,9 @@ from app.db.models import (
 )
 from app.indexer import incremental, repository
 from app.indexer.symbols import index_repository_symbols
-from app.search import engine as search_engine
+from app.search import engine as search_engine, publication
+from elasticsearch import NotFoundError
+from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
@@ -73,6 +75,25 @@ class IndexerRecoveryTests(unittest.TestCase):
         self.invalidate = patch.object(incremental, "invalidate_search_cache", return_value=2).start()
         self.addCleanup(patch.stopall)
 
+    def publication_es(self, es):
+        es.options.return_value = es
+        es.indices.get_mapping.side_effect = lambda **kw: {kw["index"]: {"mappings": {}}}
+        es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {"settings": {"index": {}}}}
+        self.active_index = None
+        def get_alias(**kwargs):
+            if self.active_index is None:
+                raise NotFoundError("missing", meta=ApiResponseMeta(404, "1.1", {}, 0,
+                    NodeConfig("http", "localhost", 9200)), body={})
+            return {self.active_index: {"aliases": {search_engine.SEARCH_ALIAS: {}}}}
+        def update_aliases(**kwargs):
+            self.active_index = kwargs["actions"][-1]["add"]["index"]
+            return {"acknowledged": True}
+        es.indices.get_alias.side_effect = get_alias
+        es.indices.update_aliases.side_effect = update_aliases
+        es.reindex.return_value = {"total": 0, "created": 0}
+        es.count.side_effect = lambda **kwargs: {"count": 0 if "query" in kwargs
+            else self.db.query(CodeSymbol).count()}
+
     def prepare_full(self):
         with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root):
             return index_repository_symbols(self.db, self.repo_id)
@@ -113,8 +134,8 @@ class IndexerRecoveryTests(unittest.TestCase):
         with patch.object(search_engine, "create_symbol_index"), \
              patch.object(search_engine, "elasticsearch_client") as es, \
              patch.object(search_engine, "_write_repository_index", side_effect=RuntimeError("bulk")) as write, \
-             patch.object(search_engine, "invalidate_search_cache", return_value=0) as invalidate:
-            es.options.return_value.delete_by_query.return_value = {}
+             patch.object(publication, "invalidate_search_cache", return_value=0) as invalidate:
+            self.publication_es(es)
             with self.assertRaises(RuntimeError):
                 search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
             invalidate.assert_not_called()
@@ -126,17 +147,18 @@ class IndexerRecoveryTests(unittest.TestCase):
                 self.assertTrue(result["resumed"])
                 self.assertIsNone(retry.get(RepositoryFullIndexJob, self.repo_id))
                 self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "old")
-            self.assertEqual(es.options.return_value.delete_by_query.call_count, 2)
-            self.assertEqual(es.options.return_value.delete_by_query.call_args.kwargs["query"],
-                             {"term": {"repository_id": self.repo_id}})
+            self.assertEqual(es.reindex.call_count, 2)
+            self.assertEqual(es.reindex.call_args.kwargs["source"]["query"],
+                {"bool": {"must_not": [{"term": {"repository_id": self.repo_id}}]}})
             invalidate.assert_called_once_with(strict=True)
 
-    def test_full_publication_incomplete_delete_keeps_job_without_bulk(self):
+    def test_full_publication_incomplete_copy_keeps_job_without_bulk(self):
         for response in ({"timed_out": True}, {"failures": ["error"]}, {"version_conflicts": 1}):
             with self.subTest(response=response), patch.object(search_engine, "create_symbol_index"), \
                  patch.object(search_engine, "elasticsearch_client") as es, \
                  patch.object(search_engine, "_write_repository_index") as write:
-                es.options.return_value.delete_by_query.return_value = response
+                self.publication_es(es)
+                es.reindex.return_value = response
                 with self.assertRaisesRegex(RuntimeError, "incomplete"):
                     search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
                 write.assert_not_called()
@@ -147,8 +169,8 @@ class IndexerRecoveryTests(unittest.TestCase):
         with patch.object(search_engine, "create_symbol_index"), \
              patch.object(search_engine, "elasticsearch_client") as es, \
              patch.object(search_engine, "_write_repository_index", return_value={"symbols_indexed": 1}), \
-             patch.object(search_engine, "invalidate_search_cache", side_effect=RuntimeError("Redis")) as invalidate:
-            es.options.return_value.delete_by_query.return_value = {}
+             patch.object(publication, "invalidate_search_cache", side_effect=RuntimeError("Redis")) as invalidate:
+            self.publication_es(es)
             with self.assertRaises(RuntimeError):
                 search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
             self.assertIsNotNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
@@ -172,11 +194,11 @@ class IndexerRecoveryTests(unittest.TestCase):
         with patch.object(search_engine, "create_symbol_index"), \
              patch.object(search_engine, "elasticsearch_client") as es, \
              patch.object(search_engine, "embed_texts") as embed, \
-             patch.object(search_engine, "invalidate_search_cache", return_value=0) as invalidate:
-            es.options.return_value.delete_by_query.return_value = {}
+             patch.object(publication, "invalidate_search_cache", return_value=0) as invalidate:
+            self.publication_es(es)
             result = search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
             self.assertEqual(result["symbols_indexed"], 0)
-            es.options.return_value.delete_by_query.assert_called_once()
+            es.reindex.assert_called_once()
             embed.assert_not_called()
             invalidate.assert_called_once_with(strict=True)
             self.assertIsNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
@@ -187,8 +209,8 @@ class IndexerRecoveryTests(unittest.TestCase):
              patch.object(search_engine, "elasticsearch_client") as es, \
              patch.object(search_engine, "embed_texts", return_value=[[0.0] * 384]), \
              patch.object(search_engine, "bulk", return_value=(0, [])), \
-             patch.object(search_engine, "invalidate_search_cache") as invalidate:
-            es.options.return_value.delete_by_query.return_value = {}
+             patch.object(publication, "invalidate_search_cache") as invalidate:
+            self.publication_es(es)
             with self.assertRaisesRegex(RuntimeError, "bulk indexing was incomplete"):
                 search_engine.index_repository_in_elasticsearch(self.db, self.repo_id)
             invalidate.assert_not_called()
@@ -420,6 +442,7 @@ class IndexerRecoveryTests(unittest.TestCase):
 class SyncLockTests(unittest.TestCase):
     def setUp(self):
         self.db = MagicMock()
+        self.db.get.return_value = None
         self.bind = self.db.get_bind.return_value
         self.bind.dialect.name = "postgresql"
         self.connection = self.bind.connect.return_value.__enter__.return_value = Mock()
@@ -431,7 +454,10 @@ class SyncLockTests(unittest.TestCase):
                 raise RuntimeError("work failed")
         queries = [str(call.args[0]) for call in self.connection.execute.call_args_list]
         self.assertIn("pg_try_advisory_lock", queries[0])
-        self.assertIn("pg_advisory_unlock", queries[1])
+        self.assertIn("pg_try_advisory_lock_shared", queries[0])
+        self.assertIn("pg_try_advisory_lock", queries[1])
+        self.assertIn("pg_advisory_unlock", queries[2])
+        self.assertIn("pg_advisory_unlock_shared", queries[3])
 
     def test_busy_lock_rejected_without_unlocking_another_owner(self):
         self.connection.execute.return_value.scalar_one.return_value = False
@@ -441,8 +467,34 @@ class SyncLockTests(unittest.TestCase):
         self.assertEqual(self.connection.execute.call_count, 1)
 
     def test_unlock_failure_discards_connection(self):
-        self.connection.execute.side_effect = [Mock(scalar_one=lambda: True), RuntimeError("connection lost")]
+        self.connection.execute.side_effect = [Mock(scalar_one=lambda: True), Mock(scalar_one=lambda: True), RuntimeError("connection lost")]
         with self.assertRaises(RuntimeError):
+            with incremental.repository_sync_lock(self.db, 1):
+                pass
+        self.connection.invalidate.assert_called_once()
+
+    def test_busy_repository_lock_releases_acquired_shared_corpus_lock(self):
+        self.connection.execute.side_effect = [Mock(scalar_one=lambda: True),
+            Mock(scalar_one=lambda: False), Mock(scalar_one=lambda: True)]
+        with self.assertRaises(incremental.RepositorySyncInProgress):
+            with incremental.repository_sync_lock(self.db, 1):
+                self.fail("must not acquire repository")
+        queries = [str(call.args[0]) for call in self.connection.execute.call_args_list]
+        self.assertEqual(len(queries), 3)
+        self.assertIn("pg_advisory_unlock_shared", queries[-1])
+
+    def test_publication_acquires_exclusive_corpus_lock(self):
+        with incremental.repository_sync_lock(self.db, 1, publication=True):
+            pass
+        queries = [str(call.args[0]) for call in self.connection.execute.call_args_list]
+        self.assertNotIn("shared", queries[0])
+        self.assertEqual(self.connection.execute.call_args_list[0].args[1]["repository_id"], -1)
+        self.assertEqual(len(queries), 4)
+
+    def test_lost_lock_invalidates_connection(self):
+        self.connection.execute.side_effect = [Mock(scalar_one=lambda: True),
+            Mock(scalar_one=lambda: True), Mock(scalar_one=lambda: False)]
+        with self.assertRaisesRegex(RuntimeError, "lock was lost"):
             with incremental.repository_sync_lock(self.db, 1):
                 pass
         self.connection.invalidate.assert_called_once()

@@ -51,13 +51,15 @@ currently parses Python only, using Tree-sitter. Elasticsearch indexing builds
 batch script adds the other five corpus repositories. These operations mutate
 the corpus; do not reindex just to run a benchmark.
 
-Full indexing now persists recovery jobs and shares the incremental-sync lock.
-After symbol preparation, finish Elasticsearch publication before syncing that
-repository. Retry a failed Elasticsearch batch after resolving the dependency;
-failed batches exit nonzero. Restart the API to create the additive job table
-and upgrade all writer processes together. See
-[full-index recovery](docs/full-index-recovery.md) for recovery and publication
-limits.
+Full indexing persists recovery jobs and stages complete Elasticsearch generations
+before atomically switching a search alias. It copies unaffected repositories
+and excludes cooperating writers during publication. After symbol preparation,
+finish Elasticsearch publication before syncing that repository. Resume a
+pending publication with `scripts.index_elasticsearch --repository-id ID` after
+resolving its dependency failure; failed batches exit nonzero. Restart all API
+and writer processes together to create the additive job tables and adopt the
+new routing/locks. Retired and abandoned indices are retained. See
+[atomic publication](docs/atomic-publication.md) for recovery, migration and limits.
 
 `GET /repositories` lists registered repositories. To update one, POST to
 `/repositories/{id}/sync`. Synchronization fetches Git changes, updates metadata

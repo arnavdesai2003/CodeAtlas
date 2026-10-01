@@ -1,5 +1,10 @@
 # Coordinated full-index recovery
 
+**Current publication:** full Elasticsearch rebuilds now use staging indices
+and an atomic alias switch. See [atomic publication](atomic-publication.md) for
+the current protocol, corpus-wide exclusion, migration and recovery commands.
+The workflow below records the preceding in-place milestone.
+
 Full symbol and Elasticsearch indexers now share the PostgreSQL session advisory
 lock used by incremental sync. It survives metadata commits. Cooperating writers
 for one repository are excluded while another owns the lock; different

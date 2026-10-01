@@ -15,12 +15,12 @@ def index_repository_symbols(
     db: Session,
     repository_id: int,
 ) -> dict:
-    with repository_sync_lock(db, repository_id):
-        try:
+    try:
+        with repository_sync_lock(db, repository_id):
             return _index_repository_symbols(db, repository_id)
-        except Exception:
-            db.rollback()
-            raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _index_repository_symbols(db: Session, repository_id: int) -> dict:

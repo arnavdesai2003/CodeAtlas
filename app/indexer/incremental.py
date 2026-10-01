@@ -81,12 +81,12 @@ def parse_git_diff(output: str) -> list[dict]:
 
 
 def sync_repository(db: Session, repository_id: int) -> dict:
-    with repository_sync_lock(db, repository_id):
-        try:
+    try:
+        with repository_sync_lock(db, repository_id):
             return _sync_repository(db, repository_id)
-        except Exception:
-            db.rollback()
-            raise
+    except Exception:
+        db.rollback()
+        raise
 
 
 def _finish_sync(db: Session, repository: Repository, job: RepositorySyncJob, *, resumed: bool) -> dict:

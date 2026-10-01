@@ -282,3 +282,59 @@ restarted. No benchmark or new performance claim. Publication remains in place
 and can expose missing/mixed documents. Next priority: staging-index recovery
 and atomic publication, including existing physical-index migration and consistent
 parallel retrieval branches. Cache-miss coalescing remains separate.
+
+
+## Latest milestone: staged atomic full publication (2026-10-01)
+
+Full Elasticsearch rebuilds now copy unaffected repositories to a fresh whole
+corpus index, add the target's committed symbols, validate/refresh, and switch
+`codeatlas_symbols_active` atomically. Legacy physical `codeatlas_symbols` is
+retained and used until the first publication. Both parallel hybrid branches
+resolve one concrete generation per request; incremental writers resolve the
+current generation but still update it in place. Effective source mappings and
+analyzers are copied for staging; model, ranking and candidate sizes are unchanged. No new external infrastructure was added.
+
+`index_publication_jobs` is an additive singleton journal created by startup;
+it was created in the development database during verification. Normal writers
+hold shared corpus plus exclusive repository session locks; full publication
+holds exclusive corpus plus repository locks. A pending journal blocks all
+cooperating writers across crashes except the owning repository's full-publication
+retry. Stages progress building → ready → published → strict cache rotation →
+job deletion. Retry inspects an ambiguous alias outcome and never rebuilds an
+already active stage. A building retry uses a fresh random name because a
+timed-out ES operation may still run. Retired/abandoned generations are retained;
+there is no automatic cleanup or rollback protocol. Do not delete journals or
+manually change aliases during recovery. Resume the owner with
+`scripts.index_elasticsearch --repository-id ID` (default 1). Upgrade/restart all
+API/writer processes together before publication; old processes are not fenced.
+See `docs/atomic-publication.md` for limits and operator workflow.
+
+96 offline tests pass. Live PostgreSQL verified shared/exclusive exclusion across
+commits. Isolated real ES/Redis with SQLite metadata and deterministic vectors
+verified alias migration/switches, old source preservation, stale IDs, repository
+isolation, copied vector search, empty replacement, Redis fencing and lost-ack
+recovery; test indices/aliases/keys were removed. All 25 evaluation cases valid,
+every metric on the existing live index reproduced, hybrid Recall@10 .880 /
+MRR .499. A real-corpus scratch publication rebuilt 40 micrograd symbols with CPU
+embeddings and copied 4,300 other documents. All BM25/hybrid/reranked metrics
+matched; standalone semantic Recall@10 .840 / MRR .581 versus live .880/.585.
+An initial scratch copy before publication itself measured semantic .800/.561;
+effective vector mappings were identical. Approximate index rebuilding shows
+quality sensitivity; do not claim exact semantic preservation. Scratch indices
+were removed; live corpus/routing/cache stayed unchanged. Existing live index
+count was 4,340; it was not rebuilt/migrated for verification. Normal port 8000
+was not restarted; temporary port 8001 servers were stopped. `.env` and default
+device/thread settings stayed unchanged.
+
+Matched uncached CPU/one-thread HTTP runs show a material single-worker latency
+regression: before/control 19.228/18.828 ms avg versus after 36.976/38.018 ms.
+Ten-worker after throughput 153.04/150.68 req/s versus before/control
+162.85/171.65. All four runs had 800 successes and zero hits. Metadata-only alias
+resolution averaged .426 ms, but interleaved engine diagnostics measured about
+15 ms; the underlying transport/scheduling cause remains unresolved. This
+records a consistency tradeoff, not a performance gain. Full details and
+limitations: `docs/performance.md`. Full publication is atomic in Elasticsearch
+per repository; batches, metadata/cache visibility and incremental sync remain
+non-atomic. Next priorities: safe generation inspection/retention and investigation
+of the name-resolution dependency without weakening generation consistency.
+Cache-miss coalescing remains a separate performance investigation.

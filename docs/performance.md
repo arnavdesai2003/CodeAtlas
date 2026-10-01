@@ -306,3 +306,137 @@ quality claims; the previous full evaluation remains the quality baseline.
 Throughput flattens after five workers in this short run; it does not establish
 a new capacity ceiling. Cached results above must not be compared as uncached
 retrieval throughput. The dedicated benchmark server was stopped afterward.
+
+
+## Atomic publication routing (2026-10-01)
+
+New measurements for the staged-publication milestone; these are **uncached
+HTTP**, not cached throughput, a direct-engine benchmark or a capacity ceiling.
+Same Apple Silicon development host, Python 3.13.15, existing Docker services,
+one Uvicorn worker on loopback 8001, access logging/proxy headers disabled,
+`APP_ENV=development BENCHMARK_CACHE_BYPASS_ENABLED=true`, opt-in
+`EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 HF_HUB_OFFLINE=1`. Defaults and `.env`
+were not changed. Ten unchanged queries, limit 10, 200 measured requests at
+1/5/10/20 workers, ten excluded warm-ups and bypass preflight per level.
+HTTP runs were sequential, with no evaluation or smoke load alongside them.
+
+Order: unchanged checkpoint `8669fa4` before → new routing after A → new
+routing after B → unchanged checkpoint bracketing control. The final control
+loaded the checkpoint's archived `app/` sources from a temporary directory
+using the same interpreter, existing `.env` and server settings. It did not
+change the working tree or copy secrets. All four runs had 800 successful
+HTTP 200 requests, zero failures and zero cache hits (3,200 measured successes).
+No Redis flush occurred. The live corpus was not rebuilt or migrated for these
+runs: new routing resolved the missing active alias to `codeatlas_symbols`.
+A read-only count confirmed 4,340 documents; this alone is not a verification
+of each repository's document count.
+
+| Run | Workers | req/s | HTTP avg ms | HTTP p95 ms | HTTP p99 ms |
+|---|---:|---:|---:|---:|---:|
+| Before | 1 | 51.79 | 19.228 | 31.132 | 32.328 |
+| Before | 5 | 147.26 | 33.720 | 42.556 | 47.047 |
+| Before | 10 | 162.85 | 60.407 | 79.773 | 91.254 |
+| Before | 20 | 149.24 | 132.596 | 197.899 | 224.109 |
+| After A | 1 | 26.97 | 36.976 | 46.675 | 53.562 |
+| After A | 5 | 124.40 | 39.574 | 54.176 | 58.743 |
+| After A | 10 | 153.04 | 64.367 | 83.411 | 90.213 |
+| After A | 20 | 148.75 | 131.404 | 199.652 | 212.304 |
+| After B | 1 | 26.23 | 38.018 | 50.271 | 53.057 |
+| After B | 5 | 137.20 | 36.159 | 51.758 | 54.603 |
+| After B | 10 | 150.68 | 65.215 | 90.387 | 92.260 |
+| After B | 20 | 156.78 | 125.333 | 148.155 | 157.559 |
+| Control | 1 | 52.87 | 18.828 | 30.324 | 34.048 |
+| Control | 5 | 163.01 | 30.510 | 37.313 | 46.388 |
+| Control | 10 | 171.65 | 57.681 | 71.524 | 76.478 |
+| Control | 20 | 158.73 | 122.778 | 200.205 | 218.758 |
+
+This is a measured latency regression, especially at one worker: after-run
+average latency was roughly twice the bracketing controls. Ten-worker throughput
+was also lower in both after runs. Twenty-worker results varied, so they do not
+support a performance improvement claim. The added name resolution binds both
+parallel branches to one concrete generation across alias switches; the
+correctness requirement is the reason for accepting this recorded tradeoff,
+not a latency optimization. Warm cache hits do not call the engine; no new
+warm-cache performance measurement is claimed here.
+
+### Diagnostic measurements (separate from HTTP)
+
+A temporary read-only diagnostic timed 100 sequential alias resolutions after
+five warm-ups: average 0.426 ms, p50 0.407 ms, p95 0.607 ms. Those tight-loop
+numbers did not explain the HTTP regression. A subsequent alternating component
+diagnostic used the same CPU/one-thread configuration, ten unchanged queries,
+ten excluded warm-ups and twenty timed hybrid calls per block. It alternated
+normal resolution and a fixed concrete target, with unchanged retrieval and
+ranking. Fixing the target was an experimental control on the unchanged corpus;
+it is **not** an application optimization or a safe route during publication.
+
+| Diagnostic block | Alias avg ms | Embedding avg ms | BM25 avg ms | Semantic branch avg ms | Hybrid avg ms |
+|---|---:|---:|---:|---:|---:|
+| Resolved A | 15.480 | 6.967 | 4.252 | 21.164 | 37.485 |
+| Fixed target A | — | 4.320 | 15.948 | 16.984 | 18.398 |
+| Resolved B | 15.113 | 6.590 | 4.391 | 22.777 | 38.675 |
+| Fixed target B | — | 3.961 | 15.798 | 15.439 | 17.481 |
+
+Stages overlap and are not additive. These short instrumented, sequential
+engine calls are not HTTP throughput or the existing production-concurrency
+profiler. The interleaved resolution timings, unlike the isolated metadata
+loop, show the additional serial dependency in the observed regression. They
+do not establish the underlying transport/scheduling cause. An equivalent
+`_resolve/index` diagnostic also took roughly 15 ms in that interleaved workload
+and did not offer a demonstrated fix; application routing continues to use the
+alias API. Ranking, candidate sizes and query text were not adjusted.
+
+The component profiler now pins one concrete index for both sequential stages;
+its total includes resolution, while its embedding/BM25/vector component
+measurements exclude resolution. It remains distinct from concurrent production
+end-to-end latency. No new component-profiler result is claimed here.
+
+All 25 live evaluation cases were valid. Every BM25, semantic, hybrid and
+reranked metric reproduced the baseline, including hybrid Recall@10 0.880 and
+MRR 0.499. Evaluation used the existing index; it was not a quality evaluation
+of a newly published real corpus. Isolated publication checks used deterministic
+test vectors, verified copied vectors remained searchable, and removed only
+temporary test indices/aliases/Redis keys. See
+[atomic publication](atomic-publication.md) for guarantees and recovery.
+The dedicated port 8001 servers were stopped; port 8000 was not restarted.
+
+
+### Real-corpus scratch publication quality
+
+A separate, non-benchmark experiment copied the existing corpus into isolated
+indices, used PostgreSQL read-only to populate temporary SQLite metadata for
+micrograd, and ran the actual publication workflow with real CPU/one-thread
+MiniLM embeddings. It replaced 40 micrograd symbols and copied the other 4,300
+documents. This checked quality on a newly published **scratch** generation,
+without switching the live alias, changing live repository rows or rotating the
+live cache. Cache invalidation was stubbed only for this separate experiment;
+the preceding isolated Redis smoke tests exercised the real invalidation path.
+Every scratch index and alias was removed afterward.
+
+| Metric | Live BM25 | Scratch BM25 | Live semantic | Scratch semantic | Live hybrid | Scratch hybrid | Live reranked | Scratch reranked |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Recall@1 | .080 | .080 | .440 | .440 | .360 | .360 | .400 | .400 |
+| Recall@3 | .240 | .240 | .720 | .720 | .560 | .560 | .520 | .520 |
+| Recall@5 | .280 | .280 | .760 | .760 | .760 | .760 | .600 | .600 |
+| Recall@10 | .280 | .280 | .880 | .840 | .880 | .880 | .800 | .800 |
+| MRR | .168 | .168 | .585 | .581 | .499 | .499 | .493 | .493 |
+
+All 25 cases remained valid. Hybrid passed the Recall@10 .880 gate and every
+hybrid/BM25/reranked metric matched. Semantic lost one Recall@10 case relative
+to the live corpus; this difference was also observed in two earlier scratch
+publication attempts. On the final run, evaluating the **initial scratch source
+copy before publication** returned semantic .440/.680/.720/.800 recall at
+1/3/5/10 and MRR .561, while its BM25/hybrid/reranked metrics matched. Thus the
+observed standalone semantic sensitivity was present in a freshly copied vector
+index before the atomic switch, as well as in the published stage. The live and
+newly created effective vector mappings matched exactly (`bbq_hnsw`, m=16,
+ef_construction=100, oversample=3.0). Staging now explicitly copies effective
+source mappings and relevant analysis/similarity/mapping settings to avoid
+future defaults changing them.
+
+These observations are consistent with approximate vector graph rebuilding
+changing candidate order, but do not identify a unique cause or establish
+reproducibility on other hardware or future rebuilds. They do not justify
+changing ranking weights, candidate sizes or evaluation cases. Every real
+corpus rebuild still requires evaluation; no exact standalone semantic metric
+preservation is claimed for the new publication workflow.

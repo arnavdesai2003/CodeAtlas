@@ -30,8 +30,10 @@ restarted by development benchmarks. No Redis flush is required.
 These Lua operations target the existing standalone Redis deployment and require
 script execution permissions; they are not a Redis Cluster implementation.
 This prevents stale cache fills after successful invalidation. It does not
-cancel outstanding responses, make partial Elasticsearch updates invisible,
-or coalesce concurrent misses. An already-running request may return old data,
+cancel outstanding responses, make partial incremental Elasticsearch updates
+invisible, or coalesce concurrent misses. Full rebuilds now publish a staged
+index atomically; old cache hits remain possible until the subsequent rotation.
+See [atomic publication](atomic-publication.md). An already-running request may return old data,
 but cannot seed that data into the new cache generation.
 
 ## Verification

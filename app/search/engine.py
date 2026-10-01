@@ -7,10 +7,10 @@ from concurrent.futures import ThreadPoolExecutor
 from app.core.clients import elasticsearch_client
 from app.core.config import settings
 from app.db.models import (
-    CodeFile, CodeSymbol, Repository, RepositorySyncJob, RepositoryFullIndexJob,
+    CodeFile, CodeSymbol, Repository, RepositorySyncJob,
 )
 from app.indexer.locking import repository_sync_lock
-from app.search.cache import invalidate_search_cache
+from app.search.indexes import resolve_active_index
 from app.search.embeddings import (
     EMBEDDING_DIMS,
     build_symbol_embedding_text,
@@ -42,7 +42,14 @@ def reranked_hybrid_search(
         limit=limit,
     )
 
-INDEX_NAME = "codeatlas_symbols"
+INDEX_NAME = "codeatlas_symbols"  # Legacy physical index; retained after migration.
+SEARCH_ALIAS = "codeatlas_symbols_active"
+
+
+def resolve_search_index() -> str:
+    return resolve_active_index(
+        elasticsearch_client, alias_name=SEARCH_ALIAS, legacy_name=INDEX_NAME,
+    )
 
 
 # ---------------------------------------------------------------------
@@ -99,16 +106,21 @@ def query_has_test_intent(query: str) -> bool:
 
 def create_symbol_index(
     client: Elasticsearch = elasticsearch_client,
+    *,
+    index_name: str | None = None,
 ) -> None:
     """
     Create the CodeAtlas Elasticsearch index if it does not exist.
     """
 
-    if client.indices.exists(index=INDEX_NAME):
+    index_name = index_name or resolve_active_index(
+        client, alias_name=SEARCH_ALIAS, legacy_name=INDEX_NAME,
+    )
+    if client.indices.exists(index=index_name):
         return
 
     client.indices.create(
-        index=INDEX_NAME,
+        index=index_name,
         settings={
             "number_of_shards": 1,
             "number_of_replicas": 0,
@@ -192,46 +204,17 @@ def create_symbol_index(
 # Full repository indexing
 # ---------------------------------------------------------------------
 
-def index_repository_in_elasticsearch(
-    db: Session,
-    repository_id: int,
-) -> dict:
-    with repository_sync_lock(db, repository_id):
-        try:
-            return _publish_repository_index(db, repository_id)
-        except Exception:
-            db.rollback()
-            raise
+def index_repository_in_elasticsearch(db: Session, repository_id: int) -> dict:
+    from app.search.publication import publish_repository_index
+    try:
+        with repository_sync_lock(db, repository_id, publication=True):
+            return publish_repository_index(db, repository_id)
+    except Exception:
+        db.rollback()
+        raise
 
 
-def _publish_repository_index(db: Session, repository_id: int) -> dict:
-    if db.get(RepositorySyncJob, repository_id) is not None:
-        raise RuntimeError("Finish pending repository synchronization before full Elasticsearch indexing.")
-    repository = db.get(Repository, repository_id)
-    if repository is None:
-        raise ValueError(f"Repository {repository_id} does not exist.")
-    job = db.get(RepositoryFullIndexJob, repository_id)
-    resumed = job is not None
-    if job is None:
-        job = RepositoryFullIndexJob(repository_id=repository_id, stats={})
-        db.add(job)
-        db.commit()
-    create_symbol_index()
-    response = elasticsearch_client.options(request_timeout=60).delete_by_query(
-        index=INDEX_NAME, query={"term": {"repository_id": repository_id}},
-        conflicts="proceed", refresh=True,
-    )
-    if response.get("timed_out") or response.get("failures") or response.get("version_conflicts"):
-        raise RuntimeError("Full Elasticsearch deletion was incomplete; retry full indexing.")
-    result = _write_repository_index(db, repository_id)
-    result["cache_entries_invalidated"] = invalidate_search_cache(strict=True)
-    result["resumed"] = resumed
-    db.delete(job)
-    db.commit()
-    return result
-
-
-def _write_repository_index(db: Session, repository_id: int) -> dict:
+def _write_repository_index(db: Session, repository_id: int, *, index_name: str) -> dict:
     """
     Index all parsed symbols from one repository.
 
@@ -240,8 +223,6 @@ def _write_repository_index(db: Session, repository_id: int) -> dict:
 
     if db.get(RepositorySyncJob, repository_id) is not None:
         raise RuntimeError("Finish pending repository synchronization before full Elasticsearch indexing.")
-
-    create_symbol_index()
 
     repository = db.get(
         Repository,
@@ -278,7 +259,7 @@ def _write_repository_index(db: Session, repository_id: int) -> dict:
             "repository_id": repository.id,
             "repository": repository.name,
             "symbols_indexed": 0,
-            "index": INDEX_NAME,
+            "index": index_name,
         }
 
     # ---------------------------------------------------------------
@@ -326,7 +307,7 @@ def _write_repository_index(db: Session, repository_id: int) -> dict:
     ):
         actions.append(
             {
-                "_index": INDEX_NAME,
+                "_index": index_name,
                 "_id": str(symbol.id),
 
                 "_source": {
@@ -374,14 +355,14 @@ def _write_repository_index(db: Session, repository_id: int) -> dict:
             raise RuntimeError("Full Elasticsearch bulk indexing was incomplete; retry full indexing.")
 
         elasticsearch_client.indices.refresh(
-            index=INDEX_NAME
+            index=index_name
         )
 
     return {
         "repository_id": repository.id,
         "repository": repository.name,
         "symbols_indexed": len(actions),
-        "index": INDEX_NAME,
+        "index": index_name,
     }
 
 
@@ -402,12 +383,13 @@ def delete_paths_from_elasticsearch(
     if not paths:
         return
 
-    create_symbol_index()
+    index_name = resolve_search_index()
+    create_symbol_index(index_name=index_name)
 
     response = elasticsearch_client.options(
         request_timeout=60
     ).delete_by_query(
-        index=INDEX_NAME,
+        index=index_name,
         query={
             "bool": {
                 "filter": [
@@ -450,7 +432,8 @@ def index_files_in_elasticsearch(
     if not file_ids:
         return 0
 
-    create_symbol_index()
+    index_name = resolve_search_index()
+    create_symbol_index(index_name=index_name)
 
     rows = (
         db.query(
@@ -518,7 +501,7 @@ def index_files_in_elasticsearch(
     ):
         actions.append(
             {
-                "_index": INDEX_NAME,
+                "_index": index_name,
                 "_id": str(symbol.id),
 
                 "_source": {
@@ -558,7 +541,7 @@ def index_files_in_elasticsearch(
         )
 
         elasticsearch_client.indices.refresh(
-            index=INDEX_NAME
+            index=index_name
         )
 
     return len(actions)
@@ -631,6 +614,8 @@ def _format_hits(
 def bm25_search(
     query: str,
     limit: int = 10,
+    *,
+    index_name: str | None = None,
 ) -> list[dict]:
     """
     Perform lexical code search using Elasticsearch BM25.
@@ -680,7 +665,7 @@ def bm25_search(
             request_timeout=60
         )
         .search(
-            index=INDEX_NAME,
+            index=index_name or resolve_search_index(),
             size=limit,
             query=final_query,
         )
@@ -698,6 +683,8 @@ def bm25_search(
 def semantic_search(
     query: str,
     limit: int = 10,
+    *,
+    index_name: str | None = None,
 ) -> list[dict]:
     """
     Perform semantic code retrieval using vector kNN search.
@@ -740,7 +727,7 @@ def semantic_search(
             request_timeout=60
         )
         .search(
-            index=INDEX_NAME,
+            index=index_name or resolve_search_index(),
             size=limit,
             knn=knn_query,
         )
@@ -817,6 +804,8 @@ def hybrid_search_weighted(
     # Run both concurrently instead of sequentially.
     # ---------------------------------------------------------------
 
+    index_name = resolve_search_index()
+
     with ThreadPoolExecutor(
         max_workers=2
     ) as executor:
@@ -824,12 +813,14 @@ def hybrid_search_weighted(
             bm25_search,
             query,
             candidate_limit,
+            index_name=index_name,
         )
 
         semantic_future = executor.submit(
             semantic_search,
             query,
             candidate_limit,
+            index_name=index_name,
         )
 
         bm25_results = bm25_future.result()

@@ -153,6 +153,11 @@ class ApiTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def setUp(self):
+        resolver = patch.object(engine, "resolve_search_index", return_value="concrete")
+        resolver.start()
+        self.addCleanup(resolver.stop)
+
     def test_incomplete_path_deletion_is_not_success(self):
         for response in [{"timed_out": True}, {"failures": [{"reason": "failed"}]}, {"version_conflicts": 1}]:
             with self.subTest(response=response), \
@@ -178,8 +183,8 @@ class RetrievalTests(unittest.TestCase):
             results = engine.hybrid_search_weighted("q", 10, .6)
         self.assertEqual([r["path"] for r in results], ["b", "a", "c"])
         self.assertEqual([r["score"] for r in results], [.6, .4, 0])
-        bm25.assert_called_once_with("q", 40)
-        semantic.assert_called_once_with("q", 40)
+        bm25.assert_called_once_with("q", 40, index_name="concrete")
+        semantic.assert_called_once_with("q", 40, index_name="concrete")
 
     def test_bm25_filters_tests_unless_requested(self):
         with patch.object(engine, "create_symbol_index") as create, patch.object(engine, "elasticsearch_client") as es:

@@ -60,8 +60,11 @@ FROM repository_sync_jobs;
 
 Do not delete jobs manually to clear errors: they are recovery records. Full
 symbol/Elasticsearch indexers reject repositories with pending sync jobs and now
-share the same advisory lock. Sync rejects pending full-index jobs before Git
-operations. See [full-index recovery](full-index-recovery.md). Upgrade all writer
+share the same repository advisory lock. Full publication also takes an
+exclusive corpus lock and its durable journal excludes all cooperating writers.
+Sync rejects pending full-index jobs before Git
+operations. See [atomic publication](atomic-publication.md) and
+[full-index recovery](full-index-recovery.md). Upgrade all writer
 processes together; older processes do not participate in this coordination.
 
 ## Ingestion cleanup

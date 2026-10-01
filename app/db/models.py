@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     ForeignKey,
     JSON,
@@ -84,6 +85,19 @@ class RepositoryFullIndexJob(Base):
     repository_id: Mapped[int] = mapped_column(
         ForeignKey("repositories.id", ondelete="CASCADE"), primary_key=True,
     )
+    stats: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class IndexPublicationJob(Base):
+    """Singleton journal: a whole-index copy must exclude all cooperating writers."""
+
+    __tablename__ = "index_publication_jobs"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_single_index_publication_job"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repository_id: Mapped[int] = mapped_column(ForeignKey("repositories.id"), nullable=False)
+    source_index: Mapped[str] = mapped_column(String(255), nullable=False)
+    staging_index: Mapped[str] = mapped_column(String(255), nullable=False)
+    phase: Mapped[str] = mapped_column(String(32), nullable=False)
     stats: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
