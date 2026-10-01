@@ -13,7 +13,7 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from app.db.database import Base
-from app.db.models import Repository, CodeFile, CodeSymbol, RepositoryFullIndexJob, IndexPublicationJob
+from app.db.models import Repository, CodeFile, CodeSymbol, RepositoryFullIndexJob, IndexPublicationJob, SearchIndexGeneration
 from app.search import engine, publication
 from app.search.indexes import alias_target
 from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
@@ -135,6 +135,83 @@ class AtomicPublicationTests(unittest.TestCase):
         self.es.delete_by_query.assert_not_called()
         self.assertIsNone(self.journal())
 
+    def test_success_records_identity_and_subsequent_retirement(self):
+        first = self.publish()["index"]
+        with self.sessions() as db:
+            row = db.get(SearchIndexGeneration, first)
+            self.assertEqual(row.state, "published")
+            self.assertEqual(row.index_uuid, "omit")
+            self.assertIsNotNone(row.published_at)
+            self.assertIsNone(row.inactive_at)
+        second = self.publish()["index"]
+        with self.sessions() as db:
+            self.assertEqual(db.get(SearchIndexGeneration, second).state, "published")
+            old = db.get(SearchIndexGeneration, first)
+            self.assertEqual(old.state, "retired")
+            self.assertGreaterEqual(old.inactive_at, old.published_at)
+            self.assertIsNone(db.get(SearchIndexGeneration, engine.INDEX_NAME))
+
+    def test_cache_recovery_does_not_extend_retirement_grace(self):
+        first = self.publish()["index"]
+        self.invalidate.side_effect = RuntimeError("Redis outage")
+        with self.assertRaises(RuntimeError):
+            self.publish()
+        with self.sessions() as db:
+            retirement = db.get(SearchIndexGeneration, first).inactive_at
+        self.invalidate.side_effect = None
+        self.publish()
+        with self.sessions() as db:
+            self.assertEqual(db.get(SearchIndexGeneration, first).inactive_at, retirement)
+
+    def test_ready_stage_identity_change_blocks_alias_switch(self):
+        self.es.indices.update_aliases.side_effect = TimeoutError("before switch")
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        self.es.indices.update_aliases.reset_mock()
+        self.es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {
+            "settings": {"index": {"uuid": "recreated"}}}}
+        with self.assertRaisesRegex(RuntimeError, "another index identity"):
+            self.publish()
+        self.es.indices.update_aliases.assert_not_called()
+        self.assertIsNone(self.alias)
+
+    def test_upgrade_adopts_untracked_ready_stage_and_source_conservatively(self):
+        self.alias = f"{engine.INDEX_NAME}_generation_{'a'*32}"
+        source = self.alias
+        self.es.indices.update_aliases.side_effect = TimeoutError("before switch")
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        self.db.query(SearchIndexGeneration).delete()
+        self.db.commit()
+        self.es.indices.update_aliases.side_effect = self.swap
+        result = self.publish()
+        self.assertEqual(self.write.call_count, 1)
+        self.assertEqual(self.db.get(SearchIndexGeneration, source).state, "retired")
+        self.assertIsNotNone(self.db.get(SearchIndexGeneration, source).inactive_at)
+        self.assertEqual(self.db.get(SearchIndexGeneration, result["index"]).state, "published")
+
+    def test_failed_identity_commit_keeps_abandoned_attempt_unverified(self):
+        commit = self.db.commit
+        calls = 0
+        def fail_identity():
+            nonlocal calls
+            calls += 1
+            if calls == 3:
+                raise RuntimeError("identity commit")
+            commit()
+        with patch.object(self.db, "commit", side_effect=fail_identity):
+            with self.assertRaises(RuntimeError):
+                self.publish()
+        first = self.journal()[1]
+        with self.sessions() as db:
+            self.assertIsNone(db.get(SearchIndexGeneration, first).index_uuid)
+        self.publish()
+        with self.sessions() as db:
+            row = db.get(SearchIndexGeneration, first)
+            self.assertEqual(row.state, "abandoned")
+            self.assertIsNotNone(row.inactive_at)
+            self.assertIsNone(row.index_uuid)
+
     def test_existing_alias_switch_uses_exact_source_and_required_remove(self):
         self.alias = "existing_generation"
         self.publish()
@@ -156,6 +233,11 @@ class AtomicPublicationTests(unittest.TestCase):
         self.assertNotEqual(first, result["index"])
         self.assertIn(first, self.stages)
         self.es.indices.delete.assert_not_called()
+        with self.sessions() as db:
+            row = db.get(SearchIndexGeneration, first)
+            self.assertEqual(row.state, "abandoned")
+            self.assertIsNotNone(row.inactive_at)
+            self.assertEqual(row.index_uuid, "omit")
 
     def test_copy_count_mismatch_keeps_old_index(self):
         self.es.reindex.return_value = {"total": 2, "created": 1}
@@ -220,7 +302,7 @@ class AtomicPublicationTests(unittest.TestCase):
         def fail_ready():
             nonlocal calls
             calls += 1
-            if calls == 3:
+            if calls == 4:
                 raise RuntimeError("ready commit")
             commit()
         with patch.object(self.db, "commit", side_effect=fail_ready):
@@ -237,7 +319,7 @@ class AtomicPublicationTests(unittest.TestCase):
         def fail_final():
             nonlocal calls
             calls += 1
-            if calls == 5:
+            if calls == 6:
                 raise RuntimeError("final commit")
             commit()
         with patch.object(self.db, "commit", side_effect=fail_final):

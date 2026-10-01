@@ -11,6 +11,10 @@ from app.db.models import (
 )
 from app.search.cache import invalidate_search_cache
 from app.search.indexes import alias_target
+from app.search.generation_lifecycle import (
+    begin_build_attempt, remember_active_source, remember_created_stage,
+    remember_publication, verify_recorded_index,
+)
 
 
 def _check_response(response, operation: str) -> None:
@@ -75,10 +79,13 @@ def publish_repository_index(db, repository_id: int) -> dict:
         if job.phase == "building":
             # A timed-out ES request may still be writing. Each build attempt
             # gets a fresh journaled name; never reuse/delete an ambiguous stage.
-            job.staging_index = f"{engine.INDEX_NAME}_generation_{uuid4().hex}"
-            job.stats = {}
+            remember_active_source(db, client, source=job.source_index, legacy_name=engine.INDEX_NAME)
+            begin_build_attempt(db, job,
+                stage=f"{engine.INDEX_NAME}_generation_{uuid4().hex}")
             db.commit()
             create_staging_index(client, source=job.source_index, stage=job.staging_index)
+            remember_created_stage(db, client, job.staging_index)
+            db.commit()
             query = {"bool": {"must_not": [{"term": {"repository_id": repository_id}}]}}
             expected_copied = client.count(index=job.source_index, query=query)["count"]
             response = client.reindex(
@@ -102,6 +109,8 @@ def publish_repository_index(db, repository_id: int) -> dict:
             db.commit()
         if job.phase != "ready":
             raise RuntimeError("Unknown index publication phase.")
+        verify_recorded_index(db, client, job.source_index)
+        verify_recorded_index(db, client, job.staging_index)
         # Validate a resumed ready stage before publication as well.
         if client.count(index=job.staging_index)["count"] != job.stats["documents_total"]:
             raise RuntimeError("Prepared staging index changed; reconcile before publication.")
@@ -120,6 +129,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
         if engine.resolve_search_index() != job.staging_index:
             raise RuntimeError("Published alias does not reference the prepared staging index.")
 
+    remember_publication(db, client, job, legacy_name=engine.INDEX_NAME)
     job.phase = "published"
     db.commit()
     # A Redis outage keeps the published job and writer exclusion in place.

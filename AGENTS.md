@@ -338,3 +338,52 @@ per repository; batches, metadata/cache visibility and incremental sync remain
 non-atomic. Next priorities: safe generation inspection/retention and investigation
 of the name-resolution dependency without weakening generation consistency.
 Cache-miss coalescing remains a separate performance investigation.
+
+## Latest milestone: reviewed generation retention (2026-10-01)
+
+`search_index_generations` is an additive lifecycle audit table created by
+startup; it was created in the local development database during verification.
+Publication durably records stage UUIDs before copy/index work, published stages,
+retired sources and abandoned tracked attempts. Retirement uses confirmation time,
+not creation age; Redis/finalization retries preserve the first inactive time.
+Recorded source/stage identity changes block a ready alias switch. Older ready
+jobs can adopt observed source/stage identities conservatively. Unknown old
+attempts and lost identity commits stay protected; never guess history from age.
+
+`scripts.manage_index_generations inspect` is read only. `plan --output PATH`
+creates a new reviewable JSON file without overwriting existing plans. Default
+policy: 24 hours inactive, keep two newest physically present retired published
+generations (minimum one hour/one retained). Active, legacy, every aliased index,
+journal references, untracked/malformed names, unexpected states and unverified
+identities/times stay protected. `apply --plan PATH --quiesced` is maintenance
+only: stop all readers/API/benchmark and writer processes first; there are no
+reader leases. The flag is an operator attestation, not proof of quiescence.
+Global exclusive corpus advisory locking excludes cooperating writers across
+audit commits. All pending sync/full/publication jobs and active/incompletely
+inspected Elasticsearch write tasks block application. The tasks API is technical
+preview in the tested Elasticsearch client; failures block deletion.
+
+Apply revalidates cluster, exact UUID/lifecycle/protection for all candidates
+before deletion and again before each index. It never expands the reviewed set,
+uses no wildcard deletes and retains audit rows. Partial/ambiguous outcomes exit
+nonzero; an unchanged plan may reconcile absent same-identity/history targets.
+Recreated indices or changed history require a new plan. No automated cleanup,
+manual force-delete, reader-time changes or cross-store rollback added. Old,
+external or direct-helper writers/manual alias changes remain outside locks;
+keep the namespace quiescent. See `docs/index-generation-retention.md`.
+
+122 offline tests pass. Live PostgreSQL verified maintenance exclusion of
+shared writers/exclusive publishers, lock persistence across commits and release
+on exceptions. Isolated real Elasticsearch with SQLite audit verified inventory,
+UUID/statistics/alias/task APIs, exact reviewed scratch deletions, retained audit,
+protected generations and idempotent retry. Isolated real Elasticsearch/Redis
+publication recovery was rerun successfully with deterministic embeddings and
+SQLite metadata. All test indices/aliases/keys were removed. Live read-only
+inventory confirmed 4,340 documents, active protected legacy routing, no pending
+jobs and no cleanup candidates. No live repository/audit rows, corpus/index,
+cache, `.env`, default settings or running API processes were changed. Live
+CPU/one-thread evaluation: all 25 cases valid, every baseline reproduced,
+hybrid Recall@10 .880 / MRR .499. No new performance claim; the earlier
+alias-resolution regression remains unresolved. Next priority: investigate that
+resolution dependency while preserving per-request generation consistency.
+Cache-miss coalescing remains separate; retained indices alone are not rollback.

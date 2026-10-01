@@ -101,6 +101,22 @@ class IndexPublicationJob(Base):
     stats: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
+class SearchIndexGeneration(Base):
+    """Lifecycle audit retained after publication jobs have been finalized."""
+
+    __tablename__ = "search_index_generations"
+    index_name: Mapped[str] = mapped_column(String(255), primary_key=True)
+    index_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    repository_id: Mapped[int | None] = mapped_column(
+        ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True,
+    )
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    inactive_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class CodeFile(Base):
     __tablename__ = "code_files"
 

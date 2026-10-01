@@ -60,6 +60,11 @@ resolving its dependency failure; failed batches exit nonzero. Restart all API
 and writer processes together to create the additive job tables and adopt the
 new routing/locks. Retired and abandoned indices are retained. See
 [atomic publication](docs/atomic-publication.md) for recovery, migration and limits.
+Use `scripts.manage_index_generations inspect` for a read-only inventory and
+`plan --output PATH` for a reviewed cleanup plan. Applying a plan requires stopped
+readers/writers and an explicit `--quiesced` attestation; active, legacy, aliased,
+journaled and untracked indices stay protected. See
+[generation retention](docs/index-generation-retention.md).
 
 `GET /repositories` lists registered repositories. To update one, POST to
 `/repositories/{id}/sync`. Synchronization fetches Git changes, updates metadata
@@ -205,9 +210,11 @@ for baselines, the index-probe experiment, and quality verification;
 `app/indexer` ingestion/parsing/sync; `app/search` retrieval/cache/reranking;
 `scripts` operational tools; `tests` offline regression tests.
 
-Full reindexing and cross-store incremental updates are not transactional across
-PostgreSQL and Elasticsearch. Pending sync jobs support retry after partial
-publication, but searches can still see intermediate index states. Generated
-symbol IDs can leave stale documents after full reindexing; verify consistency
-rather than blindly rebuilding. Simultaneous cache misses are not coalesced. Public
-deployment hardening and full-index atomicity remain future work.
+Full repository rebuilds publish an Elasticsearch generation atomically and
+exclude stale target documents. PostgreSQL metadata, Redis cache visibility and
+Elasticsearch publication remain separate commits; a batch is not one snapshot.
+Incremental sync updates the current index in place and can expose intermediate
+states while its recovery job is pending. Generation cleanup requires maintenance
+because readers have no leases. Simultaneous cache misses are not coalesced.
+Public deployment hardening and the measured alias-resolution latency regression
+remain unresolved.

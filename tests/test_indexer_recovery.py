@@ -78,7 +78,7 @@ class IndexerRecoveryTests(unittest.TestCase):
     def publication_es(self, es):
         es.options.return_value = es
         es.indices.get_mapping.side_effect = lambda **kw: {kw["index"]: {"mappings": {}}}
-        es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {"settings": {"index": {}}}}
+        es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {"settings": {"index": {"uuid": "test-uuid"}}}}
         self.active_index = None
         def get_alias(**kwargs):
             if self.active_index is None:

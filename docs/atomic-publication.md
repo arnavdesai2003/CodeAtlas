@@ -39,15 +39,18 @@ prevents later writers from changing the source or target snapshot before retry.
 
 1. Commit the journal and, if needed, the repository full-index job before
    staging writes. Initial provisioning may create an empty legacy index.
-2. Commit a fresh random staging name for each build attempt. Copy every
+2. Commit a fresh random staging name and lifecycle record for each build attempt.
+   Capture/commit its physical UUID after creation and before copying. Copy every
    document except those belonging to the target repository. Embed/index the
    target's committed symbols, refresh, and compare copied/staged counts.
 3. Commit `ready` and validation statistics before the alias request. Revalidate
    the stage count before a resumed switch. An unexpected active index or
-   altered ready stage fails with an operator reconciliation error.
+   altered ready stage fails with an operator reconciliation error. Recorded
+   source/stage UUIDs are checked before switching.
 4. Switch the alias. If its acknowledgement or the next metadata commit is
    lost, retry inspects the alias: an already-active stage is never rebuilt.
-5. Commit `published`, rotate Redis generation in strict mode, then delete both
+5. Commit `published` with generation publication/retirement history, rotate Redis
+   generation in strict mode, then delete both
    jobs together. Redis/final-commit failures retain recovery work. A repeated
    rotation fences stale fills again. Search availability does not require that
    final database transaction to have completed.
@@ -56,8 +59,9 @@ A timed-out Elasticsearch request can continue running after the caller loses
 its response. Consequently a `building` retry uses a **new** staging index;
 it does not clear/reuse the ambiguous old one. Abandoned stages are retained,
 just like retired published generations. No automatic generation deletion is
-implemented. This avoids deleting work with an unknown outcome or data still
-needed by pinned readers, at the cost of growing disk usage.
+implemented. A read-only inventory and reviewed maintenance-only cleanup command
+are available in [generation retention](index-generation-retention.md). Unknown
+history remains protected; readers must be quiescent before applying cleanup.
 
 ## Deployment and commands
 
@@ -87,8 +91,9 @@ Do not delete journals, edit generated clones, remove the active alias or
 manually switch it during pending work. After migration, deleting the alias
 would cause legacy fallback and serve the retained old corpus. A rollback also
 needs coordinated metadata/cache handling; retained data alone is not an
-automatic rollback protocol. Retention cleanup needs a separate reviewed
-lifecycle workflow; never delete the legacy/active/journaled index blindly.
+automatic rollback protocol. Use the reviewed
+[retention workflow](index-generation-retention.md); legacy/active/journaled
+indices are protected.
 
 ## Scope and limits
 
