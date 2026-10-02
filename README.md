@@ -121,6 +121,9 @@ keep normal connection reuse.
 
 ## Search
 
+Numeric settings validate at startup: semantic weight must be finite in [0, 1]
+and cache TTL must be positive. See [settings validation](docs/settings-validation.md).
+
 Outside development/test, configure `API_KEY` and send `X-CodeAtlas-API-Key` on
 search/repository requests. A configured key is enforced in local modes too;
 health and signed webhooks remain separate. See [API access](docs/api-access.md).

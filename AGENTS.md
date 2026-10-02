@@ -952,3 +952,16 @@ reproduced, hybrid Recall@10 .880 / MRR .499. Isolated one-worker HTTP smoke:
 80 successes, payload/attribution verified, server/private keys cleaned; legacy
 routing/index UUID/4,340 docs unchanged. No live corpus/settings/process changes
 or performance improvement claim.
+
+## Latest milestone: startup ranking/cache numeric validation (2026-10-02)
+
+Settings now enforce finite HYBRID_SEMANTIC_WEIGHT in [0,1] (default .60),
+positive SEARCH_CACHE_TTL (default300). Invalid env/direct construction fails
+startup instead of request-time ranking/cache writes. Other existing numeric
+constraints unchanged. Formatted Pydantic errors hide input values; programmatic
+errors()/JSON not scrubbed. See docs/settings-validation.md.
+
+227 offline tests pass with isolated defaults/endpoints/invalid/nonfinite/env/
+formatted-error tests. Existing local load confirmed .60/300 without secrets.
+No .env/data/cache/process changes, no quality/performance claim; measurements
+inherited. No weight tuning; changed valid weights still require evaluation.

@@ -12,9 +12,9 @@ class Settings(BaseSettings):
     elasticsearch_close_search_connections: bool = False
     redis_url: str
 
-    search_cache_ttl: int = 300
+    search_cache_ttl: int = Field(default=300, ge=1)
     github_webhook_secret: str = ""
-    hybrid_semantic_weight: float = 0.60
+    hybrid_semantic_weight: float = Field(default=0.60, ge=0, le=1, allow_inf_nan=False)
     benchmark_cache_bypass_enabled: bool = False
     embedding_device: str | None = None
     torch_num_threads: int | None = Field(default=None, ge=1)
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
 
