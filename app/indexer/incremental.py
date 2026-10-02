@@ -1,5 +1,6 @@
 from pathlib import Path
 import subprocess
+import re
 
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
@@ -36,7 +37,31 @@ def run_git(
     return repository_git_output(repository_path, *args)
 
 
-def parse_git_diff(output: str) -> list[dict]:
+def parse_git_diff(output: str, *, nul: bool = False) -> list[dict]:
+    if nul or "\0" in output:
+        if not output:
+            return []
+        if not output.endswith("\0"):
+            raise ValueError("Incomplete NUL-delimited Git diff.")
+        fields = output[:-1].split("\0")
+        changes = []
+        cursor = 0
+        while cursor < len(fields):
+            status = fields[cursor]
+            cursor += 1
+            paired = bool(re.fullmatch(r"[RC][0-9]{1,3}", status))
+            if not paired and status not in {"A", "M", "D", "T"}:
+                raise ValueError("Unsupported Git diff status.")
+            width = 2 if paired else 1
+            paths = fields[cursor:cursor + width]
+            if len(paths) != width or not all(paths):
+                raise ValueError("Incomplete Git diff paths.")
+            cursor += width
+            if status.startswith("R"):
+                changes.append({"status": "R", "old_path": paths[0], "path": paths[1]})
+            else:
+                changes.append({"status": "A" if status.startswith("C") else status, "path": paths[-1]})
+        return changes
     changes = []
 
     for line in output.splitlines():
@@ -184,12 +209,13 @@ def _sync_repository(
         repository_path,
         "diff",
         "--name-status",
+        "-z",
         old_commit,
         new_commit,
     )
 
     changes = parse_git_diff(
-        diff_output
+        diff_output, nul=True
     )
 
     # Move working tree to newest fetched commit.

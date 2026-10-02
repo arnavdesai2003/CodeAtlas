@@ -9,6 +9,20 @@ from app.indexer import git
 
 
 class GitRunnerTests(unittest.TestCase):
+    def test_real_nul_diff_preserves_tab_and_newline_filename(self):
+        from app.indexer.incremental import parse_git_diff
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            git.git_output("init", str(root))
+            name = "tab\tline\n.py"
+            (root / name).write_text("first")
+            git.repository_git_output(root, "add", "--", name)
+            git.repository_git_output(root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                                      "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture")
+            (root / name).write_text("second")
+            output = git.repository_git_output(root, "diff", "--name-status", "-z", "HEAD")
+            self.assertEqual(parse_git_diff(output, nul=True), [{"status": "M", "path": name}])
+
     def test_missing_child_metadata_cannot_discover_parent_repository(self):
         from app.indexer.errors import UnsafeClonePath
         with tempfile.TemporaryDirectory() as directory:

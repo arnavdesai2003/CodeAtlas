@@ -75,3 +75,23 @@ cache/index, settings or processes changed; retrieval metrics are inherited.
 This validates metadata layout, not every metadata entry or repository integrity.
 Symlinked refs/objects/config, malicious Git configuration and concurrent local
 replacement remain outside this scoped check and require trusted clone ownership.
+
+## Lossless incremental diff paths
+
+Production sync requests `git diff --name-status -z` and requires NUL-delimited
+records. Tabs/newlines, quotes, spaces and Unicode in decoded paths are preserved
+instead of splitting line/tab output or indexing Git's quoted spelling. Rename
+records retain both paths; copy records add the destination without removing
+the source. A/M/D/T records retain their status. Unknown/truncated/empty path
+records fail before worktree reset, metadata mutation or checkpoint advancement.
+The standalone parser keeps its old line-format interface for existing callers;
+production never falls back to it. Existing committed journals replay unchanged.
+
+201 offline tests pass. A real temporary Git repository verifies tab/newline
+name-status output; mocked sync verifies exact metadata/deletion-journal paths
+and malformed records stopping before reset/checkpoint. Parser tests cover
+renames/copies and preserved whitespace. CPU/one-thread live evaluation validates
+25 cases and reproduces all baseline metrics, hybrid Recall@10 .880 / MRR .499.
+No live sync, reindex, corpus/cache/settings/process changes or performance claim.
+Git stdout remains text-decoded; filenames that cannot be decoded fail safely
+rather than receiving a lossy replacement. Binary filename support is separate.

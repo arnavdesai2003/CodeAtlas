@@ -99,6 +99,8 @@ Child Git commands discard inherited repository-location/object/index overrides;
 credential helpers and Git configuration remain operator-controlled.
 New Git sync requires a clone-owned `.git` directory and uses explicit metadata/
 worktree paths; redirected or missing metadata requires inspection.
+Incremental diffs use NUL-delimited paths, preserving tab/newline filenames and
+rejecting incomplete records before reset or metadata changes.
 HTTP bodies have a configurable 1 MiB limit; oversized requests return 413 before
 route work. See [request limits](docs/request-limits.md), especially for large webhooks.
 Body receipt also has a configurable 30-second total deadline; stalled uploads

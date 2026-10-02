@@ -336,6 +336,18 @@ class RetrievalTests(unittest.TestCase):
 
 
 class ParserTests(unittest.TestCase):
+    def test_nul_diff_preserves_unusual_paths_and_copy_destination(self):
+        output = "M\0tab\tline\n.py\0R100\0old name.py\0 new\nname.py \0C100\0source.py\0copy.py\0"
+        self.assertEqual(parse_git_diff(output, nul=True), [
+            {"status": "M", "path": "tab\tline\n.py"},
+            {"status": "R", "old_path": "old name.py", "path": " new\nname.py "},
+            {"status": "A", "path": "copy.py"}])
+
+    def test_malformed_nul_diff_fails_instead_of_ignoring_records(self):
+        for output in ("M\0path", "R100\0old\0", "M\0\0", "U\0path\0", "M\tpath\n"):
+            with self.subTest(output=output), self.assertRaises(ValueError):
+                parse_git_diff(output, nul=True)
+
     def test_plain_github_url_variants_preserve_components(self):
         for url in ("https://github.com/Owner-1/repo_name.v2.git",
                     "http://www.github.com/Owner-1/repo_name.v2/",

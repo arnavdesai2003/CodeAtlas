@@ -29,6 +29,23 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_unusual_diff_path_is_journaled_and_indexed_exactly(self):
+        name = "tab\tline\n.py"
+        (self.path / name).write_text("def unusual(): pass\n")
+        self.diff = "A\0" + name + "\0"
+        incremental.sync_repository(self.db, self.repo_id)
+        self.assertIsNotNone(self.db.query(CodeFile).filter_by(path=name).first())
+        self.assertIn(name, self.delete.call_args.kwargs["paths"])
+
+    def test_malformed_diff_blocks_reset_and_checkpoint(self):
+        self.diff = "M\0truncated"
+        with self.assertRaises(ValueError):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.assertFalse(any(call.args[1] == "reset" for call in self.git.call_args_list))
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+        self.assertEqual(self.db.query(CodeSymbol).count(), 1)
+        self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+
     def test_missing_git_metadata_blocks_new_sync_before_git_or_mutation(self):
         from app.indexer.errors import UnsafeClonePath
         (self.path / ".git").rmdir()
@@ -173,7 +190,7 @@ class IndexerRecoveryTests(unittest.TestCase):
             if args[0] == "rev-parse":
                 return self.remote
             if args[0] == "diff":
-                return self.diff
+                return self.diff if "\0" in self.diff or not self.diff else self.diff.replace("\t", "\0").replace("\n", "\0") + "\0"
             return ""
 
         self.git = patch.object(incremental, "run_git", side_effect=git).start()

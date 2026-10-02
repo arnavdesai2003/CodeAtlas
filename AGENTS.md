@@ -814,3 +814,19 @@ Read-only compatibility audit: all six registered clones accepted; no paths/URLs
 printed. No live Git/network/sync/data/cache/settings/process changes or new
 quality/performance claim. Metadata-entry symlinks/integrity, malicious config
 and concurrent filesystem replacement remain outside this scoped layout check.
+
+## Latest milestone: lossless incremental Git diff records (2026-10-01)
+
+Sync now requests --name-status -z and requires strict NUL records. Decoded
+tabs/newlines/whitespace/quotes/Unicode paths preserved exactly; renames keep both
+paths, copies add destination without removing source, A/M/D/T preserved.
+Malformed/unknown/truncated records fail before reset/metadata/checkpoint work.
+Standalone line-format parser remains compatible; production no fallback.
+Committed journals replay unchanged. See docs/git-execution.md.
+
+201 offline tests pass, including real temporary Git tab/newline fixture,
+exact sync metadata/deletion paths and malformed-diff no-reset/checkpoint checks.
+Live CPU/one-thread evaluation: 25 valid, all baselines reproduced, hybrid
+Recall@10 .880 / MRR .499. No live sync/reindex/data/cache/settings/process changes,
+no performance claim. Undecodable filename bytes fail instead of lossy decode;
+binary filename support remains separate.
