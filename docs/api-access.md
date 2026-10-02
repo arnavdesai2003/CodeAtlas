@@ -57,3 +57,25 @@ Temporary server stopped, private Redis namespace removed, legacy routing/index
 UUID/4,340 docs unchanged. No .env/live generation/port 8000 changes; no new
 retrieval evaluation or benchmark capacity claim. Authentication-enabled archived
 controls require source versions that support the same server key policy.
+
+## OpenAPI and interactive documentation
+
+The schema now declares the named `CodeAtlasAPIKey` security scheme with header
+`X-CodeAtlas-API-Key` for search and repository operations. In `/docs`, use
+**Authorize** to supply the key for those requests. The scheme description explains
+that a configured key is required, while development/test may run without one.
+No configured key value is embedded in OpenAPI.
+
+Health and root operations have no API-key security requirement. GitHub webhooks
+remain governed by their separate signed-payload verification. Protected routes
+inherit the access dependency from an internal router; the exported API router
+also contains public health. Runtime missing/wrong-key responses, fail-closed
+nonlocal mode and valid-key behavior remain unchanged. FastAPI's
+[APIKeyHeader support](https://fastapi.tiangolo.com/reference/security/) provides
+the schema and header extraction, with automatic errors disabled so CodeAtlas
+retains its existing policy and messages.
+
+Offline tests verify schema coverage for every protected operation, public-route
+exclusion and absence of secret values alongside existing runtime access checks.
+No running API process or key settings were changed; restart is needed to expose
+the new schema in an existing server.

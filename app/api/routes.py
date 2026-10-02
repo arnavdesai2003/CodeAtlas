@@ -28,7 +28,8 @@ from app.indexer.incremental import sync_repository, RepositorySyncInProgress
 from app.api.auth import require_api_key
 
 
-router = APIRouter(dependencies=[Depends(require_api_key)])
+router = APIRouter()
+protected_router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 class SearchRequest(BaseModel):
@@ -120,7 +121,7 @@ def health_check():
         content=response,
     )
     
-@router.post(
+@protected_router.post(
     "/repositories",
     response_model=RepositoryCreateResponse,
     status_code=201,
@@ -146,7 +147,7 @@ def add_repository(
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Repository creation failed; inspect state before retrying.") from exc
 
-@router.get("/repositories")
+@protected_router.get("/repositories")
 def list_repositories(
     db: Session = Depends(get_db),
 ):
@@ -173,7 +174,7 @@ def list_repositories(
     }
 
 
-@router.post("/search")
+@protected_router.post("/search")
 def search_code(
     request: SearchRequest,
     http_request: Request,
@@ -227,7 +228,7 @@ def search_code(
         "results": search_result["results"],
     }
     
-@router.post(
+@protected_router.post(
     "/repositories/{repository_id}/sync"
 )
 def synchronize_repository(
@@ -263,3 +264,6 @@ def synchronize_repository(
             status_code=500,
             detail="Repository synchronization failed; retry to resume pending work.",
         ) from exc
+
+
+router.include_router(protected_router)

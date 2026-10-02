@@ -1,15 +1,18 @@
 """Single-key access boundary for search and repository APIs."""
 import hmac
 
-from fastapi import Header, HTTPException, Request
+from fastapi import HTTPException, Security
+from fastapi.security import APIKeyHeader
 from app.core.config import settings
 
 
-def require_api_key(request: Request,
-                    api_key: str | None = Header(default=None, alias="X-CodeAtlas-API-Key")):
-    # Liveness/dependency inspection remains available to local operators.
-    if request.url.path == "/health":
-        return
+api_key_header = APIKeyHeader(
+    name="X-CodeAtlas-API-Key", scheme_name="CodeAtlasAPIKey", auto_error=False,
+    description="Required when API_KEY is configured. Only development/test may run without a configured key.",
+)
+
+
+def require_api_key(api_key: str | None = Security(api_key_header)):
     expected = settings.api_key.get_secret_value()
     if not expected:
         if settings.app_env in {"development", "test"}:

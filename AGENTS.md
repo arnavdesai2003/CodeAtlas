@@ -1222,3 +1222,17 @@ validated by this change. See search-failures documentation.
 baseline metrics reproduced, hybrid Recall@10 .880 / MRR .499. No malformed live
 document observed/repaired, no corpus/cache/settings/API process changes or
 performance claim. Existing coalescing timeout behavior needed no change.
+
+## Latest milestone: API-key OpenAPI scheme (2026-10-02)
+
+OpenAPI now declares CodeAtlasAPIKey header security on search/repository routes
+for Swagger Authorize and client discovery. Configured values are never included.
+Public health/root and independently signed webhooks have no API-key requirement.
+Protected routes share an internal dependency-bearing router included in exported
+API router. APIKeyHeader uses auto_error=False to preserve existing configured/
+unconfigured environment policy and sanitized runtime responses. See api-access.
+
+275 offline tests pass, including every protected schema operation, public
+exclusions and secret absence, alongside existing runtime auth/bypass checks.
+No retrieval/ranking change; previous evaluation remains applicable. Settings and
+running APIs unchanged; existing servers need restart for the new schema.

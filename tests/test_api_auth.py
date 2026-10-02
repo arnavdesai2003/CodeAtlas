@@ -10,6 +10,25 @@ from app.api import routes
 
 
 class ApiAuthTests(unittest.TestCase):
+    def test_openapi_describes_api_key_only_for_protected_routes(self):
+        with patch.object(routes.settings, "api_key", SecretStr("private-schema-secret")):
+            schema = self.client.get("/openapi.json").json()
+        scheme = schema["components"]["securitySchemes"]["CodeAtlasAPIKey"]
+        self.assertEqual((scheme["type"], scheme["in"], scheme["name"]),
+                         ("apiKey", "header", "X-CodeAtlas-API-Key"))
+        for method, path, _ in self.requests:
+            operation = schema["paths"][path.replace("/1/", "/{repository_id}/")][method.lower()]
+            self.assertEqual(operation["security"], [{"CodeAtlasAPIKey": []}])
+        self.assertNotIn("security", schema["paths"]["/health"]["get"])
+        self.assertNotIn("private-schema-secret", str(schema))
+
+    def test_application_schema_keeps_health_root_and_webhook_outside_api_key_scheme(self):
+        from app.main import app
+        schema = app.openapi()
+        for path, method in (("/", "get"), ("/health", "get"), ("/webhooks/github", "post")):
+            self.assertNotIn("security", schema["paths"][path][method])
+        self.assertEqual(schema["paths"]["/search"]["post"]["security"], [{"CodeAtlasAPIKey": []}])
+
     def setUp(self):
         app = FastAPI()
         app.include_router(routes.router)
