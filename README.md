@@ -214,6 +214,23 @@ calling the engine directly; these measurements are not HTTP or capacity results
 controls without loading models. Source-free requests are diagnostic controls;
 production search always returns the same result fields.
 
+`scripts.profile_forwarding` compares paired curl search/alias requests on the
+host, container loopback and the container's route through the host forwarding
+port. Run each separately without other load; Docker modes use the existing
+Elasticsearch container and install nothing:
+
+```sh
+.venv/bin/python -B -m scripts.profile_forwarding --location host
+.venv/bin/python -B -m scripts.profile_forwarding --location container
+.venv/bin/python -B -m scripts.profile_forwarding --location container-host-route
+```
+
+It separates connection setup from response wait, checks connection reuse and
+records curl versions. Timings exclude Docker/curl process startup and are not
+application HTTP benchmarks. It requires the local unauthenticated HTTP setup
+on port 9200. The same container curl showed the delay only on the forwarded
+route; a specific TCP mechanism remains unproven.
+
 An optional local transport workaround, `ELASTICSEARCH_CLOSE_SEARCH_CONNECTIONS=true`,
 closes Elasticsearch connections after BM25/vector search responses. It preserves
 generation pinning and leaves alias/writer connection reuse enabled. On this Mac

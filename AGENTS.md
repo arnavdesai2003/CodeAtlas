@@ -437,3 +437,30 @@ cache and existing port 8000 unchanged; temporary port 8001 server stopped.
 No infrastructure added. Next investigation: identify the transport cause or
 validate workload-specific choices before changing defaults. Cache-miss
 coalescing remains separate.
+
+## Latest investigation: host forwarding isolation (2026-10-01)
+
+Added read-only `scripts.profile_forwarding`: curl search/alias pairs on host,
+container loopback and container through `host.docker.internal`. Same ten
+production BM25 queries/40 candidates, full results, four reuse/close blocks,
+20 measured pairs after five warm-ups per block. Reused alias response wait
+averaged 16.170/19.500 ms on host, .148/.141 ms on container loopback and
+12.384/12.453 ms through host forwarding using the same container curl binary.
+Connection preparation was tiny; the penalty followed it. Forwarded container
+close controls had ~207 ms p95 waits, reinforcing route-specific limits of the
+opt-in workaround. All 240 measured pairs completed with expected HTTP statuses
+(search 200/absent alias 404); these are curl/component timings, not API capacity.
+
+The forwarded path reproduces the delay without Python or embeddings; no unique
+TCP/kernel/proxy mechanism established. Packet capture could not access macOS
+BPF; noninteractive sudo required a password. No trace or kernel/Docker changes.
+Diagnostic validates failures, statuses, curl-version timing quirks, connection
+reuse and start/end routing/UUID/count. See `docs/performance.md` for full results,
+compatibility fixes, preliminary controls and limitations.
+
+124 offline tests pass. Live legacy routing/UUID/4,340-document count unchanged.
+No app/default/.env/corpus/index/cache/schema/container configuration or API
+process changed. Existing opt-in flag remains false by default; no new retrieval
+quality or API performance claim. More precise attribution needs privileged packet
+or forwarding/server tracing; do not change defaults based on these component
+results. Cache-miss coalescing remains separate.

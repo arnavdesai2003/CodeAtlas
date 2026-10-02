@@ -615,3 +615,91 @@ no corpus/index/cache was modified, no infrastructure was added, and the
 port 8001 server was stopped after measurement. Defaults and port 8000 remain
 unchanged. Further work should identify the transport cause or test workload
 choices before changing defaults; cache-miss coalescing remains separate.
+
+## Forwarding-path isolation (2026-10-01)
+
+New read-only curl controls reproduce the post-search delay without Python's
+Elasticsearch HTTP implementation or model inference. The same container curl
+binary was tested on both container loopback and `host.docker.internal:9200`.
+The latter traverses the host forwarding route back to the existing Elasticsearch
+container. This comparison localizes the observed delay to the forwarded path
+under these conditions; it does not establish a unique TCP/kernel/proxy cause.
+
+`scripts.profile_forwarding` captures the current production BM25 query parameters
+and pins the initial concrete index for all diagnostic searches. It runs one
+curl process per search/alias pair; `--next` reuses the search socket for the
+following alias request unless the search requested `Connection: close`.
+Docker modes execute the existing container's curl and install/write nothing.
+All paths disable curl proxies and use HTTP port 9200. No application server,
+embedding inference, Redis or writer is involved.
+
+Each location ran separately: host → container loopback → container host route.
+Each used four blocks, reuse A → close A → reuse B → close B, with five excluded
+warm-up pairs and 20 measured pairs per block. The same ten queries and 40
+candidates were used throughout; full search responses averaged 75,293.2 bytes
+in every block/location. All 240 measured pairs (480 transfers) completed with
+expected statuses: search 200, alias 404 because the active alias is still absent
+and the application resolves retained legacy `codeatlas_symbols`. This expected
+404 is not treated as a network failure. Curl errors, unexpected statuses,
+invalid timing fields, mismatched connection controls or changed metadata cause
+nonzero exit rather than a successful completion report.
+
+Host: macOS 26.6 arm64, Python 3.13.15, curl 8.7.1/libcurl 8.7.1 (Apple build).
+Container: curl 7.76.1/libcurl 7.76.1 (aarch64 Red Hat build), existing
+Elasticsearch 9.4.3. Comparing host to container alone has a client-version
+confound; comparing the two container routes uses the same curl binary.
+
+Curl reports cumulative timing phases. `ready` below is `time_pretransfer`;
+response wait is `time_starttransfer - time_pretransfer`. This separates
+connection/DNS preparation from time awaiting the first response byte, but
+response wait still includes sending the request and transport/server work.
+It is not a server-dispatch measurement. Timings exclude Python/Docker/curl
+process startup and are not CodeAtlas HTTP or capacity measurements.
+
+| Location | Block | Alias ready avg ms | Alias first byte avg ms | Response wait avg ms | Response wait p95 ms |
+|---|---|---:|---:|---:|---:|
+| Host loopback forwarding | Reuse A | .013 | 16.184 | 16.170 | 22.664 |
+| Host loopback forwarding | Close A | .086 | .852 | .766 | 1.080 |
+| Host loopback forwarding | Reuse B | .014 | 19.514 | 19.500 | 23.169 |
+| Host loopback forwarding | Close B | .093 | 1.089 | .996 | 1.543 |
+| Container loopback | Reuse A | .016 | .164 | .148 | .184 |
+| Container loopback | Close A | .045 | .240 | .196 | .264 |
+| Container loopback | Reuse B | .017 | .157 | .141 | .168 |
+| Container loopback | Close B | .044 | .236 | .191 | .215 |
+| Container through host forwarding | Reuse A | .020 | 12.403 | 12.384 | 14.005 |
+| Container through host forwarding | Close A | .314 | 31.988 | 31.674 | 207.941 |
+| Container through host forwarding | Reuse B | .022 | 12.475 | 12.453 | 14.619 |
+| Container through host forwarding | Close B | .341 | 22.013 | 21.672 | 207.239 |
+
+The forwarded reused-socket penalty appears almost entirely after connection
+preparation, rather than DNS/connect setup. Container-loopback reused requests
+avoid it, and reconnecting offers no benefit there. The container's forwarded
+close controls also had large intermittent response waits. This further limits
+the previous workaround: it remains opt-in for the measured **host caller** and
+must not be generalized to clients using other routes.
+
+Preliminary fixed-query curl pairs (ten measured after five warm-ups) similarly
+returned a 97,710-byte search response and alias first-byte averages 13.010 ms
+on host reuse, .156 ms on container-loopback reuse, and 12.500 ms through the
+host route with container curl. These are preliminary controls, separate from
+the tabled ten-query run. Initial sandboxed host curl requests failed to connect
+and were discarded. The checked-in diagnostic initially rejected curl's small
+DNS-cache lookup/zero connect time on reused sockets, then the old container
+curl's unavailable reused local-port field (-1); both compatibility checks were
+corrected before the completed runs. Connection reuse still requires
+`num_connects=0` for the alias transfer and matching local ports when reported.
+
+A requested unprivileged macOS packet capture failed because BPF access was
+denied; noninteractive privileged capture was unavailable because sudo required
+a password. No packet trace was collected and no delayed-ACK/Nagle explanation
+is established. More precise attribution needs packet or forwarding/server
+tracing with appropriate access; changing kernel/Docker settings is not justified
+by these observations alone.
+
+All 124 existing offline tests passed. Start/end host metadata checks confirmed
+unchanged routing, index UUID and 4,340-document count in each completed run.
+No application/default/.env/index/corpus/cache/schema setting changed, no API
+was started/restarted and no container configuration changed. Retrieval code was
+unchanged, so no new quality evaluation or application HTTP gain is claimed.
+The earlier opt-in workaround and measured throughput tradeoff remain unchanged;
+cache-miss coalescing remains a separate investigation.
