@@ -1091,3 +1091,17 @@ mapping passed; both scratch indices removed. Live CPU/one-thread evaluation
 reproduced all baseline metrics with 25 valid cases, hybrid Recall@10 .880 /
 MRR .499. No live corpus/routing/cache, settings or API changes; no performance
 claim or induced live creation timeout.
+
+## Latest milestone: complete publication counts (2026-10-02)
+
+All three full-publication count sites now require nonnegative integer counts
+and explicit integer zero failed shards; timeout/partial/malformed responses
+block publication. Building failures follow fresh-stage recovery; ready failures
+retain the validated stage for revalidation without rebuild. Counts do not verify
+content equality. See atomic-publication documentation. No ranking changes.
+
+250 offline tests pass. Isolated real Elasticsearch empty/populated/filtered
+count checks passed and scratch index removed. Live CPU/one-thread evaluation:
+25 valid cases, every baseline metric reproduced, hybrid Recall@10 .880 /
+MRR .499. No live corpus/routing/cache, settings or API changes; no performance
+claim or induced live shard failure.

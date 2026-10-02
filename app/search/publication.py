@@ -22,6 +22,17 @@ def _check_response(response, operation: str) -> None:
         raise RuntimeError(f"Elasticsearch {operation} was incomplete; retry full indexing.")
 
 
+def checked_count(client, **kwargs) -> int:
+    response = client.count(**kwargs)
+    failed = response.get("_shards", {}).get("failed")
+    count = response.get("count")
+    if response.get("timed_out") or type(failed) is not int or failed != 0:
+        raise RuntimeError("Elasticsearch publication count was incomplete; retry full indexing.")
+    if type(count) is not int or count < 0:
+        raise RuntimeError("Elasticsearch publication count was invalid; retry full indexing.")
+    return count
+
+
 def create_staging_index(client, *, source: str, stage: str) -> None:
     # Preserve effective vector options/analyzers rather than letting a future
     # Elasticsearch version choose different defaults for a new generation.
@@ -89,7 +100,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
             remember_created_stage(db, client, job.staging_index)
             db.commit()
             query = {"bool": {"must_not": [{"term": {"repository_id": repository_id}}]}}
-            expected_copied = client.count(index=job.source_index, query=query)["count"]
+            expected_copied = checked_count(client, index=job.source_index, query=query)
             response = client.reindex(
                 source={"index": job.source_index, "query": query},
                 dest={"index": job.staging_index}, refresh=True,
@@ -104,7 +115,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
                 raise RuntimeError("Staged symbol count did not match PostgreSQL.")
             engine.refresh_symbol_index(job.staging_index, client=client)
             expected_total = expected_copied + expected_symbols
-            if client.count(index=job.staging_index)["count"] != expected_total:
+            if checked_count(client, index=job.staging_index) != expected_total:
                 raise RuntimeError("Staging index count did not match the prepared snapshot.")
             job.stats = {**result, "documents_copied": expected_copied, "documents_total": expected_total}
             job.phase = "ready"
@@ -114,7 +125,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
         verify_recorded_index(db, client, job.source_index)
         verify_recorded_index(db, client, job.staging_index)
         # Validate a resumed ready stage before publication as well.
-        if client.count(index=job.staging_index)["count"] != job.stats["documents_total"]:
+        if checked_count(client, index=job.staging_index) != job.stats["documents_total"]:
             raise RuntimeError("Prepared staging index changed; reconcile before publication.")
         previous_alias = alias_target(client, alias_name=engine.SEARCH_ALIAS)
         if (previous_alias or engine.INDEX_NAME) != job.source_index:

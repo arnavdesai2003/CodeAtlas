@@ -148,7 +148,7 @@ class AtomicPublicationTests(unittest.TestCase):
         self.swap = swap
         self.es.indices.get_alias.side_effect = get_alias
         self.es.indices.update_aliases.side_effect = swap
-        self.es.count.side_effect = lambda **kwargs: {"count": 2 if "query" in kwargs else 3}
+        self.es.count.side_effect = lambda **kwargs: {"count": 2 if "query" in kwargs else 3, "_shards": {"failed": 0}}
         self.es.reindex.return_value = {"total": 2, "created": 2}
 
     def publish(self, db=None):
@@ -346,8 +346,60 @@ class AtomicPublicationTests(unittest.TestCase):
         self.write.assert_not_called()
         self.assertEqual(self.journal()[0], "building")
 
+    def test_partial_source_count_stops_before_copy_and_can_retry(self):
+        self.es.count.side_effect = lambda **kwargs: {"count": 2, "_shards": {"failed": 1}}
+        with self.assertRaisesRegex(RuntimeError, "count was incomplete"):
+            self.publish()
+        self.assertEqual(self.journal()[0], "building")
+        failed_stage = self.journal()[1]
+        self.es.reindex.assert_not_called()
+        self.write.assert_not_called()
+        self.invalidate.assert_not_called()
+        self.es.count.side_effect = lambda **kwargs: {
+            "count": 2 if "query" in kwargs else 3, "_shards": {"failed": 0},
+        }
+        with self.sessions() as retry:
+            result = self.publish(retry)
+        self.assertTrue(result["resumed"])
+        self.assertNotEqual(result["index"], failed_stage)
+        self.es.indices.update_aliases.assert_called_once()
+
+    def test_partial_ready_count_blocks_alias_switch_without_rebuild(self):
+        self.es.indices.update_aliases.side_effect = TimeoutError("before switch")
+        with self.assertRaises(TimeoutError):
+            self.publish()
+        stage = self.journal()[1]
+        self.es.indices.update_aliases.reset_mock()
+        self.es.indices.update_aliases.side_effect = self.swap
+        self.es.count.side_effect = lambda **kwargs: {"count": 3, "_shards": {"failed": 1}}
+        with self.sessions() as retry:
+            with self.assertRaisesRegex(RuntimeError, "count was incomplete"):
+                self.publish(retry)
+        self.assertEqual(self.journal()[0], "ready")
+        self.es.indices.update_aliases.assert_not_called()
+        self.invalidate.assert_not_called()
+        self.es.count.side_effect = lambda **kwargs: {"count": 3, "_shards": {"failed": 0}}
+        with self.sessions() as retry:
+            self.assertEqual(self.publish(retry)["index"], stage)
+        self.write.assert_called_once()
+        self.es.reindex.assert_called_once()
+
+    def test_count_requires_valid_integer_and_complete_shard_response(self):
+        self.es.count.side_effect = None
+        for response in ({"count": 3}, {"count": 3, "_shards": {"failed": False}},
+                         {"count": True, "_shards": {"failed": 0}},
+                         {"count": -1, "_shards": {"failed": 0}},
+                         {"count": 3.0, "_shards": {"failed": 0}},
+                         {"count": 3, "_shards": {"failed": 0}, "timed_out": True}):
+            with self.subTest(response=response):
+                self.es.count.return_value = response
+                with self.assertRaises(RuntimeError):
+                    publication.checked_count(self.es, index="stage")
+        self.es.count.return_value = {"count": 0, "_shards": {"failed": 0}}
+        self.assertEqual(publication.checked_count(self.es, index="empty"), 0)
+
     def test_staged_count_mismatch_prevents_alias_switch(self):
-        self.es.count.side_effect = lambda **kwargs: {"count": 2}
+        self.es.count.side_effect = lambda **kwargs: {"count": 2, "_shards": {"failed": 0}}
         with self.assertRaisesRegex(RuntimeError, "Staging index count"):
             self.publish()
         self.assertIsNone(self.alias)
@@ -509,7 +561,7 @@ class AtomicPublicationTests(unittest.TestCase):
         self.assertEqual(self.journal()[0], "ready")
         self.es.indices.update_aliases.reset_mock()
         self.es.count.side_effect = None
-        self.es.count.return_value = {"count": 0}
+        self.es.count.return_value = {"count": 0, "_shards": {"failed": 0}}
         with self.assertRaisesRegex(RuntimeError, "Prepared staging index changed"):
             self.publish()
         self.es.indices.update_aliases.assert_not_called()

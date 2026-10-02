@@ -205,3 +205,22 @@ returning an unacknowledged response and verify no copy, bulk work, alias switch
 or cache rotation occurs before retry. An isolated real staging-creation check
 verified the successful response and copied mapping; both scratch indices were
 removed afterward.
+
+### Complete publication counts
+
+Source-copy expectations, the built stage's document total and ready-stage retry
+validation all use checked counts. Responses must report integer `_shards.failed`
+zero and a nonnegative integer `count`; missing/invalid fields or a timeout stop
+publication. A numerically matching partial count cannot authorize an alias
+switch. Elasticsearch documents shard failures in its
+[Count API response](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-count).
+
+A source/build-time count failure leaves building work for a fresh-stage retry.
+A ready-stage count failure preserves the prepared stage and retries validation
+without copying or indexing again. Existing writer exclusion, identity checks
+and cache finalization remain unchanged. This is a count/completeness check,
+not a checksum of document content.
+
+Offline tests cover partial source and ready counts, malformed values and
+successful recovery. Real isolated checks verified empty, populated and filtered
+counts; the scratch index was removed. No live shard outage was induced.

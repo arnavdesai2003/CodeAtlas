@@ -417,7 +417,7 @@ class IndexerRecoveryTests(unittest.TestCase):
         es.indices.update_aliases.side_effect = update_aliases
         es.reindex.return_value = {"total": 0, "created": 0}
         es.count.side_effect = lambda **kwargs: {"count": 0 if "query" in kwargs
-            else self.db.query(CodeSymbol).count()}
+            else self.db.query(CodeSymbol).count(), "_shards": {"failed": 0}}
 
     def prepare_full(self):
         with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root):
