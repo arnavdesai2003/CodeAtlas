@@ -19,4 +19,3 @@ class GitRunnerTests(unittest.TestCase):
             self.assertEqual(kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
             self.assertEqual(kwargs["env"]["CODEATLAS_TEST"], "keep")
             self.assertEqual(git.os.environ["GIT_TERMINAL_PROMPT"], "1")
-
