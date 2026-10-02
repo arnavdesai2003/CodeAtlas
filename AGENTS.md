@@ -1021,3 +1021,16 @@ pending work. Tests use SQLite transactions and mocked Elasticsearch/Redis.
 
 236 offline tests pass. No production behavior, live stores, settings or running
 processes changed; no new retrieval or performance claims.
+
+## Latest milestone: ambiguous retention audit coverage (2026-10-02)
+
+Fresh-session tests now cover acknowledged index deletion followed by successful
+audit commit and lost database acknowledgement. Cleanup stops before the next
+candidate; unchanged-plan retry reconciles absence without rewriting the first
+deletion timestamp. Recreated same-name/different-UUID indices block all retry
+deletions despite the previously committed deleted audit row. Requirements for
+quiescence, reviewed plans and maintenance locks remain unchanged. See
+`docs/index-generation-retention.md`. Tests use SQLite and simulated ES identities.
+
+238 offline tests pass. No production changes, live deletion, policy/settings
+changes or new retrieval/performance measurements.

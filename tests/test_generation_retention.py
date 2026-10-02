@@ -33,7 +33,8 @@ class RetentionTests(unittest.TestCase):
         def fk(connection, _):
             connection.execute("PRAGMA foreign_keys=ON")
         Base.metadata.create_all(self.sql)
-        self.db = sessionmaker(self.sql, autoflush=False, expire_on_commit=False)()
+        self.sessions = sessionmaker(self.sql, autoflush=False, expire_on_commit=False)
+        self.db = self.sessions()
         self.addCleanup(self.db.close)
         repo = Repository(name="demo", clone_url="https://github.com/demo/demo")
         self.db.add(repo)
@@ -272,6 +273,53 @@ class RetentionTests(unittest.TestCase):
         retry = self.apply(plan, quiesced=True)
         self.assertEqual(retry["already_absent"], [name(3)])
         self.assertEqual(self.db.get(SearchIndexGeneration, name(3)).state, "deleted")
+
+    def lose_audit_ack(self, plan):
+        commit = self.db.commit
+
+        def committed_but_lost():
+            commit()
+            raise RuntimeError("private database URL")
+
+        with patch.object(self.db, "commit", side_effect=committed_but_lost):
+            result = self.blocked(plan, quiesced=True)
+        self.assertEqual(result["deleted"], [name(3)])
+        self.assertEqual(result["failed_index"], name(3))
+        self.assertNotIn("private", result["detail"])
+        self.assertNotIn(name(3), self.meta)
+        self.assertIn(name(4), self.meta)
+        self.es.indices.delete.assert_called_once_with(index=name(3))
+        self.db.close()
+
+    def test_lost_audit_ack_reconciles_in_new_session_preserving_timestamp(self):
+        plan = self.plan()
+        self.lose_audit_ack(plan)
+        with self.sessions() as retry:
+            row = retry.get(SearchIndexGeneration, name(3))
+            self.assertEqual(row.state, "deleted")
+            deleted_at = row.deleted_at
+            self.assertIsNotNone(deleted_at)
+            result = apply_cleanup_plan(retry, self.es, plan, quiesced=True,
+                now=NOW, legacy_name=ROOT, alias_name=ALIAS)
+            self.assertEqual(result["already_absent"], [name(3)])
+            self.assertEqual(result["deleted"], [name(4)])
+            self.assertEqual(row.deleted_at, deleted_at)
+            self.assertEqual(row.index_uuid, f"uuid-{name(3)}")
+        self.assertEqual(self.es.indices.delete.call_count, 2)
+
+    def test_recreated_index_after_lost_audit_ack_blocks_all_retry_deletions(self):
+        plan = self.plan()
+        self.lose_audit_ack(plan)
+        self.meta[name(3)] = {"aliases": {}, "settings": {"index": {"uuid": "replacement"}}}
+        self.es.indices.delete.reset_mock()
+        with self.sessions() as retry:
+            with self.assertRaises(GenerationCleanupError):
+                apply_cleanup_plan(retry, self.es, plan, quiesced=True,
+                    now=NOW, legacy_name=ROOT, alias_name=ALIAS)
+            self.assertEqual(retry.get(SearchIndexGeneration, name(3)).state, "deleted")
+        self.es.indices.delete.assert_not_called()
+        self.assertIn(name(3), self.meta)
+        self.assertIn(name(4), self.meta)
 
     def test_missing_index_with_changed_history_cannot_be_reconciled(self):
         plan = self.plan()

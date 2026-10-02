@@ -136,3 +136,21 @@ This milestone changes publication bookkeeping and maintenance tooling, not the
 request retrieval path, model, ranking or candidate sizes. It makes no new
 latency or capacity claim. Existing alias-resolution performance limitations
 remain in [performance](performance.md).
+
+### Lost audit-commit acknowledgements
+
+An acknowledged Elasticsearch deletion can be followed by a successful audit
+commit whose database acknowledgement is lost. The command still reports failure
+and stops before the next candidate. Inspect durable state through a fresh
+session: the deleted audit row may already be committed.
+
+An unchanged reviewed plan can reconcile that absent index, preserve its first
+`deleted_at` timestamp and continue with remaining candidates. If the name has
+been recreated with a different UUID, retry blocks before any further deletion,
+even when the old audit row already says `deleted`. Do not edit the old audit to
+match a replacement index. Existing quiescence and writer-lock requirements still
+apply to retries.
+
+Offline tests commit the audit before injecting acknowledgement loss and retry
+with fresh SQLite sessions and simulated Elasticsearch identities. They do not
+simulate a PostgreSQL network fault or change retention policy.
