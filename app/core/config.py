@@ -1,10 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+from pydantic import Field, SecretStr
 
 
 class Settings(BaseSettings):
     app_name: str = "CodeAtlas"
     app_env: str = "development"
+    api_key: SecretStr = SecretStr("")
 
     database_url: str
     elasticsearch_url: str

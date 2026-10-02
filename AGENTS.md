@@ -748,3 +748,20 @@ same connection successfully. Probe stopped; no stores/settings/production
 process changes or performance claim. HTTP/2 checked only via ASGI header test,
 not real transport/proxy. Public authorization/aggregate concurrency remain
 separate priorities.
+
+## Latest milestone: single-key API access boundary (2026-10-01)
+
+Search/repository router now requires X-CodeAtlas-API-Key when API_KEY is set
+in any environment. Without a key, only development/test remain unauthenticated;
+all other APP_ENV values fail closed 503. Wrong/missing configured key returns
+401 before services/DB. SecretStr settings redaction and constant-time bytes
+comparison; no keys printed/committed. Health/root/docs public; webhooks retain
+independent signatures. Body limits precede authentication. Valid key never
+overrides guarded benchmark bypass. See docs/api-access.md.
+
+187 offline tests pass, including all protected operations, nonlocal defaults,
+valid/invalid keys, health and benchmark guard behavior after authentication.
+No live data/cache/settings/process changes; .env untouched and .env.example
+documents optional key. Retrieval/performance checks inherited. Key grants all
+operations, no scopes/multi-key rotation/TLS/rate limits/identity infrastructure.
+Restart every process together for rotation; local benchmarks assume unset key.

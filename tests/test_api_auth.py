@@ -1,0 +1,64 @@
+"""Offline API access checks; no live stores or secrets."""
+import unittest
+from unittest.mock import patch
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from app.api import routes
+
+
+class ApiAuthTests(unittest.TestCase):
+    def setUp(self):
+        app = FastAPI()
+        app.include_router(routes.router)
+        self.client = TestClient(app)
+        self.addCleanup(self.client.close)
+        self.requests = (("POST", "/search", {"query": "q"}),
+                         ("POST", "/repositories", {"clone_url": "https://github.com/o/r"}),
+                         ("GET", "/repositories", None),
+                         ("POST", "/repositories/1/sync", None))
+
+    def test_nonlocal_modes_fail_closed_without_key_before_work(self):
+        def forbidden_db():
+            raise AssertionError("Database dependency ran before authentication.")
+        self.client.app.dependency_overrides[routes.get_db] = forbidden_db
+        for environment in ("production", "staging", "prod"):
+            with patch.object(routes.settings, "app_env", environment), \
+                 patch.object(routes.settings, "api_key", SecretStr("")), \
+                 patch.object(routes, "search_with_cache") as search:
+                for method, path, payload in self.requests:
+                    response = self.client.request(method, path, json=payload)
+                    self.assertEqual(response.status_code, 503)
+                search.assert_not_called()
+
+    def test_configured_key_rejects_missing_and_wrong_before_work(self):
+        with patch.object(routes.settings, "api_key", SecretStr("test-private-key")), \
+             patch.object(routes, "search_with_cache") as search:
+            for method, path, payload in self.requests:
+                for headers in ({}, {"X-CodeAtlas-API-Key": "wrong"}):
+                    response = self.client.request(method, path, json=payload, headers=headers)
+                    self.assertEqual(response.status_code, 401)
+                    self.assertNotIn("test-private-key", response.text)
+            search.assert_not_called()
+
+    def test_valid_key_allows_search_without_changing_inputs(self):
+        with patch.object(routes.settings, "app_env", "production"), \
+             patch.object(routes.settings, "api_key", SecretStr("test-private-key")), \
+             patch.object(routes, "search_with_cache", return_value={"results": [],
+                 "cache_hit": False, "search_latency_ms": 1}) as search:
+            response = self.client.post("/search", json={"query": " q "},
+                headers={"X-CodeAtlas-API-Key": "test-private-key"})
+        self.assertEqual(response.status_code, 200)
+        search.assert_called_once_with(query=" q ", limit=10, bypass_cache=False)
+
+    def test_health_remains_accessible_with_configured_key(self):
+        with patch.object(routes.settings, "api_key", SecretStr("test-private-key")), \
+             patch.object(routes, "engine"), patch.object(routes, "elasticsearch_client") as es, \
+             patch.object(routes, "redis_client"):
+            es.ping.return_value = True
+            self.assertEqual(self.client.get("/health").status_code, 200)
+
+    def test_key_is_redacted_by_settings_type(self):
+        self.assertNotIn("test-private-key", repr(SecretStr("test-private-key")))

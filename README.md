@@ -106,6 +106,10 @@ keep normal connection reuse.
 
 ## Search
 
+Outside development/test, configure `API_KEY` and send `X-CodeAtlas-API-Key` on
+search/repository requests. A configured key is enforced in local modes too;
+health and signed webhooks remain separate. See [API access](docs/api-access.md).
+
 Queries must contain non-whitespace text and be at most 4,096 characters. Invalid
 queries return 422 before retrieval; valid query text is preserved exactly.
 

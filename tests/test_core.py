@@ -18,6 +18,7 @@ os.environ.update(
 )
 
 import httpx
+from pydantic import SecretStr
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -210,9 +211,11 @@ class ApiTests(unittest.TestCase):
             with self.subTest(enabled=enabled, environment=environment, host=host), \
                  patch.object(routes.settings, "benchmark_cache_bypass_enabled", enabled), \
                  patch.object(routes.settings, "app_env", environment), \
+                 patch.object(routes.settings, "api_key", SecretStr("test-api-key")), \
                  TestClient(self.client.app, client=(host, 12345)) as client:
                 response = client.post("/search", json={"query": "q"}, headers={
                     "X-CodeAtlas-Benchmark-Bypass": "true", "X-Forwarded-For": "127.0.0.1",
+                    "X-CodeAtlas-API-Key": "test-api-key",
                 })
                 self.assertEqual(response.status_code, 403)
         self.search.assert_not_called()

@@ -25,9 +25,10 @@ from app.indexer.errors import (
 )
 from app.db.models import Repository
 from app.indexer.incremental import sync_repository, RepositorySyncInProgress
+from app.api.auth import require_api_key
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 class SearchRequest(BaseModel):
