@@ -78,3 +78,31 @@ timing, not HTTP throughput or sustained capacity.
 EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 HF_HUB_OFFLINE=1 \
   .venv/bin/python -B -m scripts.benchmark_miss_burst --workers 20 --rounds 2
 ```
+
+For HTTP mixed-query and process-boundary diagnostics:
+
+```sh
+EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 HF_HUB_OFFLINE=1 \
+  .venv/bin/python -B -m scripts.benchmark_http_miss_burst --server-workers 2
+```
+
+This script owns a temporary loopback server on port 8001, refuses occupied
+ports, warms every worker and releases 20 requests together in each burst.
+Five bursts each use one, two, five or ten unchanged benchmark queries. Redis
+generation rotation and engine-call counters use a random diagnostic namespace;
+server shutdown and exact-key cleanup run on failure too. Port 8000 is excluded.
+`--app-dir PATH` selects archived application sources for matched controls;
+worker readiness verifies the loaded service path. Do not deploy the diagnostic
+factory `scripts.http_miss_burst_server`; use the ordinary application server.
+
+Responses identify their worker only in the diagnostic factory. The client
+checks timing/attribution, per-query result equality, actual engine counters,
+participation by every worker, and unchanged index routing/UUID/document count.
+Nonzero exit invalidates the run; a final `completed` record confirms cleanup.
+The extra Redis increment on every engine call and diagnostic middleware affect
+timing in both controls and current runs. These are instrumented HTTP bursts,
+not standard benchmark throughput or sustained capacity. Requests arriving after
+another request fills Redis can be hits, even though each burst starts empty.
+Worker assignment depends on client connections and OS scheduling; the reported
+query/worker pair count helps explain variation. More workers can duplicate
+leaders; this diagnostic does not demonstrate a need for distributed locking.

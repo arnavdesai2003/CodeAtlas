@@ -819,3 +819,59 @@ was changed. Generation Lua protocol and maintenance/quiescence requirements
 remain unchanged. Process-local sharing does not address cross-process misses
 or atomic metadata/cache/index visibility. The forwarding-delay mechanism still
 requires additional tracing; no Docker/kernel settings were changed.
+
+## Instrumented HTTP mixed-miss bursts (2026-10-01)
+
+Added `scripts.benchmark_http_miss_burst` and a diagnostic-only server factory.
+Apple Silicon macOS 26.6, Python 3.13.15; every API worker used CPU embeddings,
+one PyTorch thread and ordinary pooled search connections. Twenty client requests
+were released together per burst, five bursts for each query mix. All requests
+used unchanged benchmark queries and limit 10. Models were warm in every worker.
+Each burst began with an empty private Redis generation. Later arrivals could
+hit entries filled during the burst. Client latency includes transport/body read,
+excludes the release-gate wait; startup, warming and invalidation are excluded.
+
+Controls loaded the app archived from `f194b69`, before coalescing; current app
+was `fd7e566`. Run order: before 1 worker, after 1, before 2, after 2, repeat
+after 2, control 2, repeat after 1, control 1. Every run measured 400 requests;
+all 3,200 succeeded. Each row below represents 100 requests per run. Paired
+values are first/repeat for after, before/closing control for baseline. Engine
+calls are independently counted in Redis and checked against response attribution.
+
+| API workers | Distinct queries per burst | Baseline engine calls | After engine calls | Baseline avg HTTP ms | After avg HTTP ms | Baseline p95 HTTP ms | After p95 HTTP ms |
+|---|---|---|---|---|---|---|---|
+| 1 | 1 | 75 / 67 | 5 / 5 | 88.723 / 84.154 | 43.540 / 44.136 | 131.857 / 136.301 | 50.718 / 52.387 |
+| 1 | 2 | 90 / 90 | 10 / 10 | 119.784 / 122.736 | 42.257 / 40.384 | 162.704 / 165.566 | 60.318 / 53.119 |
+| 1 | 5 | 98 / 94 | 25 / 25 | 131.820 / 145.914 | 50.984 / 51.521 | 161.272 / 231.349 | 82.971 / 68.990 |
+| 1 | 10 | 100 / 98 | 50 / 50 | 131.036 / 131.829 | 84.801 / 72.001 | 161.791 / 175.306 | 121.037 / 91.084 |
+| 2 | 1 | 62 / 66 | 10 / 10 | 63.833 / 66.039 | 41.853 / 41.172 | 118.863 / 117.932 | 58.806 / 53.723 |
+| 2 | 2 | 85 / 84 | 19 / 17 | 78.020 / 77.462 | 47.966 / 47.284 | 114.557 / 116.877 | 76.742 / 70.781 |
+| 2 | 5 | 96 / 93 | 39 / 45 | 87.252 / 83.765 | 56.950 / 62.912 | 119.880 / 127.769 | 77.678 / 86.130 |
+| 2 | 10 | 96 / 98 | 72 / 60 | 82.032 / 92.438 | 80.013 / 71.747 | 113.226 / 124.891 | 116.337 / 97.184 |
+
+One-worker runs retrieved once per distinct query per burst. Two workers could
+retrieve the same query independently: one-query bursts used two leaders each.
+Ten-query after runs reached 75/65 distinct query-worker pairs across five bursts,
+with 72/60 actual calls; Redis hits could eliminate some leaders. Distribution
+varied with connection assignment. Shared-response counts for the four mixes
+were 83/84/74/48 and 76/89/75/48 at one worker; 62/58/52/23 and 67/75/49/34
+at two workers. Remaining successful responses were Redis hits or retrievals.
+Same-query payload fingerprints matched within every burst.
+
+These synthetic mixes show diminishing sharing as query diversity and process
+count grow. The first two-worker ten-query run had little average improvement
+and slightly worse p95. There is no general multi-worker capacity claim and no
+demonstrated need for distributed locks. Retain bounded process-local coalescing;
+representative traffic and failure requirements are needed before extending it.
+Timings include diagnostic middleware and a synchronous Redis counter increment
+per engine call in both app versions. This overhead is paid more often by the
+baseline; measured latency gains cannot be attributed solely to coalescing.
+These runs are not the standard uncached bypass benchmark or sustained capacity.
+
+Every run verified unchanged legacy routing, index UUID and 4,340 documents,
+then stopped its temporary server and removed only its random Redis namespace.
+Port 8000, live cache generation, corpus, ranking, schema, .env and defaults were
+untouched. 142 offline tests pass, including diagnostic namespace isolation,
+legacy/current attribution, bad worker/timing/envelopes and exited-server cleanup.
+Only diagnostic code changed; the preceding milestone's quality evaluation is
+inherited, not a new measurement. No new retrieval quality claim is made.

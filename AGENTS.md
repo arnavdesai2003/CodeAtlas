@@ -506,3 +506,33 @@ Coalescing is process-local, not a global capacity limit; slow leaders can trigg
 fallback duplication. Cross-process sharing and the precise forwarding-delay
 mechanism remain separate investigations; privileged tracing was unavailable at
 the prior milestone. Atomic metadata/cache/index visibility remains unresolved.
+
+## Latest milestone: HTTP mixed-miss and worker diagnostics (2026-10-01)
+
+`scripts.benchmark_http_miss_burst` owns an isolated loopback server on 8001,
+warms every worker and counts real engine executions in a random private Redis
+namespace. It rejects occupied ports, validates loaded source/worker participation,
+response attribution/equality and unchanged index identity/count. It stops the
+server and removes only its private keys on success/failure. Never deploy its
+diagnostic server factory. See `docs/cache-coalescing.md` for commands.
+
+Eight instrumented HTTP runs compared archived pre-coalescing `f194b69` with
+`fd7e566`, CPU/one-thread, pooled search connections, one/two API workers.
+Each run released 20 requests in five bursts for each 1/2/5/10-query mix.
+All 3,200 requests succeeded. One-worker after calls per 100 requests: 5/10/25/50
+in both runs. Two-worker after calls: 10/19/39/72 and 10/17/45/60. Requests
+arriving after a fill can hit Redis. One-query two-worker bursts needed two
+leaders; ten-query benefit varied with worker assignment and was small in one
+run. Redis counter/middleware overhead affects both versions, paid more often
+by baseline; these are not standard uncached HTTP throughput or sustained capacity.
+Full paired timing/count comparisons are in `docs/performance.md`.
+
+142 offline tests pass. Only diagnostic code/docs changed; retrieval evaluation
+from the preceding milestone remains inherited. All runs verified protected
+legacy routing, same index UUID and 4,340 documents. Temporary servers stopped,
+private namespaces removed; port 8000, live generation, corpus/index, schema,
+ranking, .env/defaults untouched. Keep coalescing process-local: synthetic bursts
+alone do not justify distributed coordination. Next priority: inspect search/API
+failure behavior and deployment boundaries before further performance expansion;
+privileged forwarding-delay tracing and atomic metadata/cache visibility remain
+separate unresolved work.
