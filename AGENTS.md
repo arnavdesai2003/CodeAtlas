@@ -1134,3 +1134,17 @@ query limits, normalization policy or model/ranking changes. See search-failures
 baseline metric reproduced, hybrid Recall@10 .880 / MRR .499. No invalid live
 model output was observed; no corpus/routing/cache/settings/API changes or new
 performance claim.
+
+## Latest milestone: optional reranker score validation (2026-10-02)
+
+Optional reranking validates exact candidate/score count and finite numeric scalar
+scores before result construction/sorting. Malformed output raises typed
+InvalidRerankerOutputError through existing sanitized backend-error handling;
+NumPy scalar scores, stable ties, valid limits and copied candidate dictionaries
+are preserved. Empty sets skip model loading; default API reranking remains off.
+See search-failures documentation. No model/ranking policy changes.
+
+258 offline tests pass. Live CPU/one-thread evaluation: 25 valid cases and every
+baseline reproduced, including reranked Recall@10 .800 / MRR .493 and hybrid
+Recall@10 .880 / MRR .499. No invalid live model output observed, no corpus/cache/
+settings/API process changes and no performance claim.

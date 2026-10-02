@@ -11,3 +11,7 @@ class InvalidSearchResponseError(IncompleteSearchError):
 
 class InvalidQueryEmbeddingError(IncompleteSearchError):
     """Model output cannot safely be submitted as a query vector."""
+
+
+class InvalidRerankerOutputError(IncompleteSearchError):
+    """Reranker output does not provide one finite score per candidate."""

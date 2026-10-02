@@ -76,3 +76,19 @@ normalization or all Elasticsearch similarity constraints. Offline tests cover
 malformed output, no vector-search submission/cache fill, clean flight state,
 healthy retry and sanitized API errors. Real-query evaluation retained every
 baseline metric. No invalid live model output was observed.
+
+## Invalid optional reranker output
+
+The optional cross-encoder now requires exactly one finite numeric scalar per
+candidate before constructing or sorting results. Short/extra batches, non-scalar
+output, booleans, strings, nonfinite scores and numeric overflow raise
+`InvalidRerankerOutputError` instead of silently truncating candidates or sorting
+invalid values. NumPy numeric scalars remain supported; valid score conversion,
+stable tie order and result limits remain unchanged. Candidate dictionaries are
+not modified. Empty candidate sets still skip model loading.
+
+The typed error participates in existing sanitized API backend-error handling;
+the default `/search` path still does not invoke reranking. Offline tests cover
+bad batches/scores, healthy retry, stable ordering and sanitized responses. Live
+25-case evaluation reproduced all metrics, including reranked Recall@10 .800 /
+MRR .493. No malformed live cross-encoder output was observed.

@@ -28,7 +28,7 @@ from app.indexer.repository import parse_github_url
 from app.indexer.incremental import parse_git_diff
 from app.search import cache, engine, service
 from scripts import benchmark_api
-from app.search.errors import IncompleteSearchError, InvalidSearchResponseError, InvalidQueryEmbeddingError
+from app.search.errors import IncompleteSearchError, InvalidSearchResponseError, InvalidQueryEmbeddingError, InvalidRerankerOutputError
 from elastic_transport import ConnectionError as ElasticsearchConnectionError, ApiResponseMeta, NodeConfig
 from elasticsearch import ApiError
 from app.indexer.errors import (
@@ -189,7 +189,8 @@ class ApiTests(unittest.TestCase):
                       ApiError("private failure", meta, {"secret": "backend details"}),
                       IncompleteSearchError("private index name"),
                       InvalidSearchResponseError("private score details"),
-                      InvalidQueryEmbeddingError("private model output")):
+                      InvalidQueryEmbeddingError("private model output"),
+                      InvalidRerankerOutputError("private reranker output")):
             with self.subTest(error=type(error).__name__):
                 self.search.side_effect = error
                 result = self.client.post("/search", json={"query": "q"})

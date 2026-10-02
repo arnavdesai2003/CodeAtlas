@@ -1,6 +1,9 @@
 from functools import lru_cache
+import math
+from numbers import Real
 
 from sentence_transformers import CrossEncoder
+from app.search.errors import InvalidRerankerOutputError
 
 
 RERANKER_MODEL = (
@@ -63,11 +66,25 @@ def rerank_results(
         show_progress_bar=False,
     )
 
+    try:
+        if len(scores) != len(results):
+            raise InvalidRerankerOutputError("Reranker score count does not match candidates.")
+        checked_scores = []
+        for score in scores:
+            if isinstance(score, bool) or not isinstance(score, Real):
+                raise InvalidRerankerOutputError("Reranker score was invalid.")
+            value = float(score)
+            if not math.isfinite(value):
+                raise InvalidRerankerOutputError("Reranker score was invalid.")
+            checked_scores.append(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise InvalidRerankerOutputError("Reranker output was invalid.") from exc
+
     reranked = []
 
     for result, score in zip(
         results,
-        scores,
+        checked_scores,
     ):
         reranked.append(
             {
