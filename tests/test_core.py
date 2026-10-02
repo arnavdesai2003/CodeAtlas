@@ -28,7 +28,7 @@ from app.indexer.repository import parse_github_url
 from app.indexer.incremental import parse_git_diff
 from app.search import cache, engine, service
 from scripts import benchmark_api
-from app.search.errors import IncompleteSearchError
+from app.search.errors import IncompleteSearchError, InvalidSearchResponseError
 from elastic_transport import ConnectionError as ElasticsearchConnectionError, ApiResponseMeta, NodeConfig
 from elasticsearch import ApiError
 from app.indexer.errors import (
@@ -187,7 +187,8 @@ class ApiTests(unittest.TestCase):
         meta = ApiResponseMeta(503, "1.1", {}, 0.0, NodeConfig("http", "localhost", 9200))
         for error in (ElasticsearchConnectionError("private backend URL"),
                       ApiError("private failure", meta, {"secret": "backend details"}),
-                      IncompleteSearchError("private index name")):
+                      IncompleteSearchError("private index name"),
+                      InvalidSearchResponseError("private score details")):
             with self.subTest(error=type(error).__name__):
                 self.search.side_effect = error
                 result = self.client.post("/search", json={"query": "q"})
@@ -263,6 +264,30 @@ class ApiTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_invalid_backend_scores_are_rejected(self):
+        for score in (float("nan"), float("inf"), -float("inf"), True, "NaN", "1.0", 10 ** 400):
+            with self.subTest(score=score), self.assertRaises(InvalidSearchResponseError):
+                engine._format_hits([{"_source": {}, "_score": score}])
+
+    def test_valid_scores_and_normalization_remain_unchanged(self):
+        source = dict(repository="r", path="file.py", name="f", qualified_name="f",
+                      kind="function", start_line=1, end_line=1, code="def f(): pass")
+        for score, expected in ((None, 0.0), (0, 0.0), (-1.5, -1.5), (2, 2.0)):
+            self.assertEqual(engine._format_hits([{"_source": source, "_score": score}])[0]["score"], expected)
+        self.assertEqual(engine._min_max_normalize([2, 4, 6]), [0, .5, 1])
+        self.assertEqual(engine._min_max_normalize([3, 3]), [1, 1])
+
+    def test_invalid_score_normalization_never_fills_cache(self):
+        for scores in ([float("nan")], [float("inf"), 1], [-1e308, 1e308]):
+            with self.subTest(scores=scores), \
+                 patch.object(service, "get_cached_search", return_value=cache.CacheLookup(generation="g")), \
+                 patch.object(service, "set_cached_search") as write, \
+                 patch.object(service, "search_code", side_effect=lambda **kw: engine._min_max_normalize(scores)):
+                with self.assertRaises(InvalidSearchResponseError):
+                    service.search_with_cache("q", 10)
+                write.assert_not_called()
+                self.assertFalse(service._miss_flights._pending)
+
     def test_hybrid_never_returns_surviving_branch_after_failure(self):
         for failing in ("bm25_search", "semantic_search"):
             with self.subTest(failing=failing), \

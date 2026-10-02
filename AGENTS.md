@@ -937,3 +937,18 @@ successes including six Redis hits, same-query payload/attribution verified.
 Server stopped/private keys removed; legacy routing/index UUID/4,340 docs
 unchanged. No live generation/settings/process changes or performance claim.
 Retrieval evaluation remains inherited; no ranking/candidate/index changes.
+
+## Latest milestone: finite retrieval score boundary (2026-10-02)
+
+Hit formatting rejects non-numeric/bool/NaN/infinity/overflow scores; null/missing
+still zero. Normalization rejects non-finite values and overflowing ranges.
+InvalidSearchResponseError uses existing sanitized503, no successful cache/shared
+publication. Finite values/min-max/equal-score behavior/weights/candidates unchanged;
+no bad-score fallback. Scope excludes full backend schema/optional reranker output;
+no prior live invalid-score incident observed. See docs/search-failures.md.
+
+222 offline tests pass. Live CPU/one-thread evaluation: 25 valid, all baselines
+reproduced, hybrid Recall@10 .880 / MRR .499. Isolated one-worker HTTP smoke:
+80 successes, payload/attribution verified, server/private keys cleaned; legacy
+routing/index UUID/4,340 docs unchanged. No live corpus/settings/process changes
+or performance improvement claim.

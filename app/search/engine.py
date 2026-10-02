@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -18,7 +19,7 @@ from app.search.embeddings import (
     embed_texts,
 )
 from app.search.reranker import rerank_results
-from app.search.errors import IncompleteSearchError
+from app.search.errors import IncompleteSearchError, InvalidSearchResponseError
 
 def reranked_hybrid_search(
     query: str,
@@ -581,12 +582,21 @@ def _format_hits(
 
     for hit in hits:
         source = hit["_source"]
+        score = hit.get("_score")
+        if score is None:
+            score = 0.0
+        if isinstance(score, bool) or not isinstance(score, (int, float)):
+            raise InvalidSearchResponseError("Invalid retrieval score.")
+        try:
+            score = float(score)
+        except OverflowError as exc:
+            raise InvalidSearchResponseError("Retrieval score overflow.") from exc
+        if not math.isfinite(score):
+            raise InvalidSearchResponseError("Invalid retrieval score.")
 
         results.append(
             {
-                "score": float(
-                    hit.get("_score") or 0.0
-                ),
+                "score": float(score),
 
                 "repository": (
                     source["repository"]
@@ -770,6 +780,9 @@ def _min_max_normalize(
     if not values:
         return []
 
+    if not all(math.isfinite(value) for value in values):
+        raise InvalidSearchResponseError("Invalid retrieval scores.")
+
     minimum = min(values)
     maximum = max(values)
 
@@ -778,6 +791,9 @@ def _min_max_normalize(
             1.0
             for _ in values
         ]
+
+    if not math.isfinite(maximum - minimum):
+        raise InvalidSearchResponseError("Retrieval score range overflow.")
 
     return [
         (

@@ -34,3 +34,27 @@ MRR .499. No corpus, mappings, model, candidates or ranking changes were made.
 This milestone hardens search failures only. Repository mutation routes and
 public deployment authentication/authorization remain separate work. Use loopback
 for local development; this change does not make the API ready for public exposure.
+
+## Finite retrieval scores (2026-10-02)
+
+Elasticsearch hit formatting now rejects non-numeric/bool scores, NaN/infinity
+and numeric conversion overflow. Missing/null scores retain their prior zero
+value. Finite negative/zero/positive numeric scores retain their existing values.
+Normalization rejects non-finite inputs and an overflowing finite score range
+rather than silently emitting invalid or collapsed fusion scores. Ordinary
+min-max fusion, equal-score handling, weights and candidate sizes are unchanged.
+
+These failures raise InvalidSearchResponseError through the existing sanitized
+503 path. They never reach successful cache fills or shared results; flight
+cleanup/retry behavior remains unchanged. This validates retrieval scores, not
+every backend field or optional reranker model output. No live invalid-score
+incident was observed; the guards defend the response boundary without masking
+bad scores as zero or falling back to one retrieval branch.
+
+222 offline tests pass, covering score types/non-finite/overflow, finite/null
+compatibility, normalization, no cache writes/retained flights and sanitized API
+errors. Live CPU/one-thread evaluation: 25 valid cases, every baseline reproduced,
+hybrid Recall@10 .880 / MRR .499. Isolated one-worker HTTP smoke: 80 successful
+queries with payload/attribution checks; temporary server/private keys cleaned,
+legacy routing/index UUID/4,340 documents unchanged. No live corpus/settings/
+process changes or performance improvement claim.

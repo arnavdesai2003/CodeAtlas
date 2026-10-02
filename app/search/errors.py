@@ -3,3 +3,7 @@
 
 class IncompleteSearchError(RuntimeError):
     """Elasticsearch returned a timed-out or failed-shard search response."""
+
+
+class InvalidSearchResponseError(IncompleteSearchError):
+    """Retrieval scores cannot be safely formatted or normalized."""
