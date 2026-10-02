@@ -733,3 +733,18 @@ and measured observations; never deploy the probe factory.
 API processes changed, no new retrieval or performance claim. This verifies
 fresh connections, not same-connection reuse/proxies or hard scheduling bounds.
 Public authorization and aggregate concurrency remain separate priorities.
+
+## Latest milestone: rejected HTTP upload connection closure (2026-10-01)
+
+Body middleware sends Connection: close on early 408/413 for HTTP/1.0/1.1,
+without draining stalled/unread uploads. Clients reconnect after rejection;
+accepted requests retain keep-alive. HTTP/2 scopes omit connection-specific
+headers, leaving stream behavior to the server. See docs/request-limits.md.
+
+182 offline tests pass. Isolated socket probe: eight cases pass, all rejected
+fixed/chunked bodies return close+EOF, including unfinished oversized uploads;
+no rejected handler work, fresh connections healthy, accepted upload/stats reuse
+same connection successfully. Probe stopped; no stores/settings/production
+process changes or performance claim. HTTP/2 checked only via ASGI header test,
+not real transport/proxy. Public authorization/aggregate concurrency remain
+separate priorities.

@@ -101,6 +101,8 @@ Body receipt also has a configurable 30-second total deadline; stalled uploads
 return 408 without starting route work. Search/sync execution remains separate.
 Run `.venv/bin/python -B -m scripts.verify_http_receipt` for isolated real-socket
 checks of stalled, oversized and exact-limit fixed/chunked bodies.
+HTTP/1 body-limit/deadline rejections close the connection; accepted requests
+keep normal connection reuse.
 
 ## Search
 

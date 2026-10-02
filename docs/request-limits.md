@@ -93,3 +93,20 @@ took 202.680/202.207 ms including a subsequent stats request; these are diagnost
 observations, not hard scheduling guarantees or production latency measurements.
 The checks do not establish same-connection reuse or proxy behavior. 181 offline
 tests still pass. No live stores, settings or API processes were touched.
+
+## Rejected upload connections
+
+Early 408/413 responses now send `Connection: close` for HTTP/1.0 and HTTP/1.1
+because unread body bytes may remain. They do not drain a stalled upload before
+replying. Clients must open a new connection after rejection. Accepted requests
+retain normal keep-alive behavior. HTTP/2 ASGI scopes omit connection-specific
+headers; stream handling remains the server's responsibility.
+
+The socket probe now has eight passing cases, adding an oversized unfinished
+upload and accepted connection reuse. Every rejected fixed/chunked upload received
+the close header and socket EOF, including bodies whose declared length had not
+yet arrived. Rejected requests did no handler work; fresh requests succeeded
+after each. An accepted upload and subsequent stats request succeeded over the
+same connection. 182 offline tests pass, including HTTP/1 rejection headers and
+HTTP/2 header omission. This is not real HTTP/2 or proxy verification. The
+isolated probe server stopped; production settings/stores/processes unchanged.

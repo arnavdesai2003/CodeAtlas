@@ -9,6 +9,11 @@ class RequestBodyLimit:
         self.max_bytes = max_bytes
         self.timeout_seconds = timeout_seconds
 
+    async def reject(self, scope, receive, send, status, detail):
+        headers = {"Connection": "close"} if scope.get("http_version", "1.1") in {"1.0", "1.1"} else {}
+        await JSONResponse(status_code=status, content={"detail": detail},
+                           headers=headers)(scope, receive, send)
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
@@ -28,13 +33,9 @@ class RequestBodyLimit:
                     if not message.get("more_body", False):
                         break
         except TimeoutError:
-            return await JSONResponse(status_code=408, content={
-                "detail": "Request body receive timeout."
-            })(scope, receive, send)
+            return await self.reject(scope, receive, send, 408, "Request body receive timeout.")
         if oversized:
-            return await JSONResponse(status_code=413, content={
-                "detail": "Request body too large."
-            })(scope, receive, send)
+            return await self.reject(scope, receive, send, 413, "Request body too large.")
         payload = bytes(body)
         delivered = False
 

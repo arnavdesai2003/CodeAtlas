@@ -34,7 +34,11 @@ def request(port, wire):
         connection.sendall(wire)
         response = http.client.HTTPResponse(connection)
         response.begin()
-        return response.status, json.loads(response.read())
+        body = json.loads(response.read())
+        if response.status in {408, 413}:
+            if response.getheader("Connection", "").lower() != "close" or connection.recv(1) != b"":
+                raise RuntimeError("Rejected upload connection was not closed.")
+        return response.status, body
 
 
 def main():
@@ -49,6 +53,7 @@ def main():
         ("partial content-length", head + b"Content-Length: 4\r\n\r\nx", 408),
         ("partial chunked", head + b"Transfer-Encoding: chunked\r\n\r\n1\r\nx\r\n", 408),
         ("oversize content-length", head + b"Content-Length: 17\r\n\r\n" + b"x" * 17, 413),
+        ("oversize unfinished upload", head + b"Content-Length: 100\r\n\r\n" + b"x" * 17, 413),
         ("oversize chunked", head + b"Transfer-Encoding: chunked\r\n\r\n11\r\n" + b"x" * 17 + b"\r\n0\r\n\r\n", 413),
         ("exact content-length", head + b"Content-Length: 16\r\n\r\n" + b"x" * 16, 200),
         ("exact chunked", head + b"Transfer-Encoding: chunked\r\n\r\n8\r\n" + b"x" * 8 + b"\r\n8\r\n" + b"y" * 8 + b"\r\n0\r\n\r\n", 200),
@@ -84,6 +89,18 @@ def main():
             print(json.dumps({"case": label, "status": status,
                 "elapsed_ms": round((time.monotonic() - start) * 1000, 3),
                 "dispatched": accepted}), flush=True)
+        with socket.create_connection(("127.0.0.1", port), timeout=3) as connection:
+            connection.sendall(head + b"Content-Length: 16\r\n\r\n" + b"x" * 16)
+            first = http.client.HTTPResponse(connection)
+            first.begin()
+            if first.status != 200 or json.loads(first.read()) != {"bytes": 16}:
+                raise RuntimeError("Persistent accepted upload failed.")
+            connection.sendall(stats_wire)
+            second = http.client.HTTPResponse(connection)
+            second.begin()
+            if second.status != 200 or json.loads(second.read()) != {"dispatched": accepted + 1}:
+                raise RuntimeError("Accepted connection could not be reused.")
+        print(json.dumps({"case": "accepted connection reuse", "status": 200}), flush=True)
     finally:
         process.terminate()
         try:
@@ -91,7 +108,7 @@ def main():
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait(timeout=5)
-    print(json.dumps({"completed": True, "server_stopped": True, "cases": len(cases)}))
+    print(json.dumps({"completed": True, "server_stopped": True, "cases": len(cases) + 1}))
 
 
 if __name__ == "__main__":

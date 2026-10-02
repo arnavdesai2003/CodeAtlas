@@ -26,6 +26,7 @@ class BodyLimitTests(unittest.IsolatedAsyncioTestCase):
         app.assert_not_called()
         self.assertTrue(cancelled.is_set())
         self.assertEqual(send.call_args_list[0].args[0]["status"], 408)
+        self.assertIn((b"connection", b"close"), send.call_args_list[0].args[0]["headers"])
 
     async def test_route_execution_is_outside_body_deadline(self):
         async def app(scope, receive, send):
@@ -65,7 +66,14 @@ class BodyLimitTests(unittest.IsolatedAsyncioTestCase):
         observed, send, receive = await self.run_body([b"abc", b"de", b"ignored"])
         self.assertEqual(observed, [])
         self.assertEqual(send.call_args_list[0].args[0]["status"], 413)
+        self.assertIn((b"connection", b"close"), send.call_args_list[0].args[0]["headers"])
         self.assertEqual(receive.await_count, 2)
+
+    async def test_http2_rejection_omits_connection_specific_header(self):
+        send = AsyncMock()
+        await RequestBodyLimit(AsyncMock(), 1)({"type": "http", "http_version": "2"},
+            AsyncMock(return_value={"type": "http.request", "body": b"xx"}), send)
+        self.assertNotIn((b"connection", b"close"), send.call_args_list[0].args[0]["headers"])
 
     async def test_content_length_cannot_bypass_actual_byte_limit(self):
         observed, send, _ = await self.run_body([b"12345"], headers=[(b"content-length", b"1")])
