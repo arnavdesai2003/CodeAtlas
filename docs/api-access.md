@@ -20,8 +20,7 @@ state. Webhooks retain independent HMAC authentication and are not gated by the
 API key. Body-size/receipt checks run before authentication; malformed/oversized
 bodies can return their existing errors first. A valid API key does not enable
 benchmark bypass: environment, opt-in and loopback restrictions still apply.
-Existing benchmark clients assume keyless local development; supply the header
-in any custom client when enabling a local key.
+Custom clients must supply the header when enabling a local key.
 
 187 offline tests pass. Checks cover every search/repository operation failing
 closed outside local modes, wrong/missing keys, accepted exact-text searches,
@@ -33,3 +32,28 @@ No multi-key rotation window, scopes, rate limits, aggregate concurrency control
 access audit log or identity provider was added. Restart every process together
 for rotation; old processes retain old settings. This is a limited application
 access boundary, not a complete public deployment configuration.
+
+## Authenticated local benchmarks
+
+`scripts.benchmark_api` and `scripts.benchmark_http_miss_burst` now read the
+explicit client variable `CODEATLAS_BENCHMARK_API_KEY`. Set it to match the
+server's `API_KEY`; do not put a key in command-line arguments. The clients
+never automatically use server `API_KEY` or read server secrets from .env for
+authentication. With the client variable unset/empty, behavior stays keyless.
+
+Keyed targets must use HTTP/HTTPS loopback IPs or localhost, with no URL user
+credentials. Nonloopback destinations are rejected before HTTP requests.
+Both clients disable redirects and proxy environment handling. Client keys must
+be printable ASCII without whitespace/control characters; validation errors do
+not echo the supplied value. Cached and guarded uncached requests retain the
+authentication header, including when adding the bypass header. All server-side
+benchmark bypass restrictions still apply; a key does not relax them.
+
+190 offline tests pass. New checks cover server-key independence, destination/
+header rejection and HTTPX default-header merging. An isolated one-worker
+CPU/one-thread HTTP smoke generated a matching key only in parent/child process
+environments: all 80 small-body searches passed attribution/equality checks.
+Temporary server stopped, private Redis namespace removed, legacy routing/index
+UUID/4,340 docs unchanged. No .env/live generation/port 8000 changes; no new
+retrieval evaluation or benchmark capacity claim. Authentication-enabled archived
+controls require source versions that support the same server key policy.

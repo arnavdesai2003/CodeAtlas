@@ -14,6 +14,7 @@ import statistics
 from time import perf_counter
 
 import httpx
+from scripts.http_auth import benchmark_headers
 
 
 BASE_URL = "http://127.0.0.1:8000"
@@ -190,6 +191,7 @@ async def benchmark(workers, *, uncached=False, base_url=BASE_URL):
     print(f"\nCONCURRENCY: {workers}", flush=True)
     async with httpx.AsyncClient(
         base_url=base_url,
+        headers=benchmark_headers(base_url),
         limits=httpx.Limits(
             max_connections=workers, max_keepalive_connections=workers
         ),

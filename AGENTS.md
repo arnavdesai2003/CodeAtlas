@@ -765,3 +765,18 @@ No live data/cache/settings/process changes; .env untouched and .env.example
 documents optional key. Retrieval/performance checks inherited. Key grants all
 operations, no scopes/multi-key rotation/TLS/rate limits/identity infrastructure.
 Restart every process together for rotation; local benchmarks assume unset key.
+
+## Latest milestone: explicit keyed local benchmark clients (2026-10-01)
+
+benchmark_api and benchmark_http_miss_burst use explicit client env
+CODEATLAS_BENCHMARK_API_KEY, never automatically server API_KEY/.env credentials.
+Unset/empty remains keyless. Keyed targets require HTTP/HTTPS loopback/localhost
+without URL credentials; redirects/proxy env disabled. Printable ASCII/no
+whitespace client keys; errors do not echo secrets. Client header merges with
+guarded bypass headers; server restrictions remain. See docs/api-access.md.
+
+190 offline tests pass. Isolated keyed one-worker CPU/one-thread HTTP smoke:
+generated key in process env only, 80 successful searches with verified
+attribution/equality. Server stopped/private keys removed; legacy routing/UUID/
+4,340 docs unchanged. No .env/live cache generation/port 8000 changes, no new
+retrieval/capacity claim. Archived matched controls need compatible key policy.

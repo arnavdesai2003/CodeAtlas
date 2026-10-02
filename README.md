@@ -109,6 +109,8 @@ keep normal connection reuse.
 Outside development/test, configure `API_KEY` and send `X-CodeAtlas-API-Key` on
 search/repository requests. A configured key is enforced in local modes too;
 health and signed webhooks remain separate. See [API access](docs/api-access.md).
+For keyed local HTTP benchmarks, set `CODEATLAS_BENCHMARK_API_KEY` to match the
+server key; benchmark credentials are sent only to loopback targets.
 
 Queries must contain non-whitespace text and be at most 4,096 characters. Invalid
 queries return 422 before retrieval; valid query text is preserved exactly.

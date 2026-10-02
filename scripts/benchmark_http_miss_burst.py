@@ -24,6 +24,7 @@ import httpx
 
 from app.search import cache, engine
 from scripts.benchmark_api import QUERIES, percentile, valid_timing
+from scripts.http_auth import benchmark_headers
 
 
 def validate_response(response, query, ready):
@@ -76,7 +77,9 @@ async def measure(args, prefix, process, source):
     aggregate = {}
     observed_pids = set()
     limits = httpx.Limits(max_connections=args.concurrency, max_keepalive_connections=args.concurrency)
-    async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{args.port}", limits=limits, timeout=60, trust_env=False) as http:
+    base_url = f"http://127.0.0.1:{args.port}"
+    async with httpx.AsyncClient(base_url=base_url, headers=benchmark_headers(base_url),
+                                limits=limits, timeout=60, trust_env=False, follow_redirects=False) as http:
         # Initialize client connections without populating search entries.
         health = await asyncio.gather(*[http.get("/health") for _ in range(args.concurrency)])
         if any(response.status_code != 200 for response in health):
