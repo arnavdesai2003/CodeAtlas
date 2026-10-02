@@ -27,7 +27,12 @@ closure. Services and background synchronization are mocked: no external deliver
 clone, live database write, corpus change or cache invalidation was performed.
 Retrieval code is unchanged, so the preceding quality evaluation is inherited.
 
+The assembled API now enforces a [request body limit](request-limits.md) before
+webhook verification. The default 1 MiB limit returns 413 for oversized payloads,
+including unauthenticated/unconfigured requests; exact accepted bytes retain
+their signature. Configure a larger limit explicitly for larger valid events.
+
 This is a scoped webhook fix. It adds no replay/delivery deduplication, durable
-background queue, body-size bound or authorization for repository CRUD/search
+background queue or authorization for repository CRUD/search
 routes. Keep local API servers on loopback; public deployment controls remain
 separate work.

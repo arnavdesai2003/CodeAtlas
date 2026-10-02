@@ -669,3 +669,22 @@ recovery plus existing failures. No live Git/clone/sync, data/index/cache/schema
 and performance measurements remain inherited. Timeout is per direct subprocess,
 not whole-request/process-tree supervision; helpers holding pipes, askpass/config,
 redirects and public authorization remain separate limits.
+
+## Latest milestone: streaming HTTP body bound (2026-10-01)
+
+Assembled app uses pure ASGI RequestBodyLimit before all HTTP route work.
+REQUEST_BODY_MAX_BYTES defaults to 1 MiB, positive integer; restart to change.
+Actual received chunks count, not Content-Length. Oversize returns stable 413
+before parsing/signatures/DB/search/scheduling. Accepted bodies replay exact bytes;
+signed webhook whitespace remains valid. Disconnect does not dispatch; lifespan
+passes through. The size limit precedes route authentication including unconfigured
+webhooks. Large legitimate deliveries need explicit higher limits. See
+`docs/request-limits.md`; .env.example documents the setting, .env unchanged.
+
+175 offline tests pass. Isolated one-worker CPU/one-thread HTTP smoke: 80
+successful small-body searches, verified attribution/equality. Server stopped,
+private namespace removed; index UUID/legacy routing/4,340 docs unchanged.
+No live generation/corpus/schema/settings/port 8000 changes. Quality evaluation
+is inherited; no performance claim. Bound covers middleware body accumulation,
+not aggregate concurrency/transport buffers or receive deadlines. Public API
+authorization, rate/concurrency limits and slow-client policy remain separate.

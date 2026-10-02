@@ -10,12 +10,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api import webhooks
+from app.api.body_limit import RequestBodyLimit
 
 
 class WebhookTests(unittest.TestCase):
     def setUp(self):
         app = FastAPI()
         app.include_router(webhooks.router)
+        app.add_middleware(RequestBodyLimit, max_bytes=1024)
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
         secret = patch.object(webhooks.settings, "github_webhook_secret", "test-secret")
@@ -36,6 +38,18 @@ class WebhookTests(unittest.TestCase):
     def assert_no_work(self):
         self.session.assert_not_called()
         self.sync.assert_not_called()
+
+    def test_oversized_body_rejected_before_signature_and_database(self):
+        with patch.object(webhooks, "verify_github_signature") as verify:
+            response = self.send(b"x" * 1025)
+        self.assertEqual(response.status_code, 413)
+        verify.assert_not_called()
+        self.assert_no_work()
+
+    def test_exact_body_limit_retains_signed_whitespace(self):
+        response = self.send(b"{}" + b" " * 1022, event="ping")
+        self.assertEqual(response.status_code, 202)
+        self.assert_no_work()
 
     def test_unconfigured_rejects_empty_secret_forgery(self):
         with patch.object(webhooks.settings, "github_webhook_secret", ""):

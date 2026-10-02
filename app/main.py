@@ -4,6 +4,8 @@ from fastapi import FastAPI
 
 from app.api.routes import router
 from app.db.database import init_db
+from app.api.body_limit import RequestBodyLimit
+from app.core.config import settings
 
 
 @asynccontextmanager
@@ -24,6 +26,7 @@ app = FastAPI(
 )
 
 
+app.add_middleware(RequestBodyLimit, max_bytes=settings.request_body_max_bytes)
 app.include_router(router)
 app.include_router(webhook_router)
 
