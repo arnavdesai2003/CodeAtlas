@@ -126,7 +126,7 @@ def discover_source_files(repository_path: Path) -> list[dict]:
 
 
 def get_current_commit(repository_path: Path) -> str:
-    return repository_git_output(repository_path, "rev-parse", "HEAD")
+    return repository_git_output(repository_path, "rev-parse", "--verify", "--end-of-options", "HEAD^{commit}")
 
 
 def get_current_branch(repository_path: Path) -> str:

@@ -29,6 +29,44 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def real_revision_fixture(self):
+        from app.indexer.git import git_output, repository_git_output
+        git_output("init", str(self.path))
+
+        def commit():
+            repository_git_output(self.path, "add", "-A")
+            repository_git_output(self.path, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                                  "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture")
+            return repository_git_output(self.path, "rev-parse", "HEAD")
+
+        old = commit()
+        self.repo.last_indexed_commit = old
+        self.db.commit()
+        (self.path / "sample.py").write_text("def actual_target():\n    return 3\n")
+        target = commit()
+        repository_git_output(self.path, "reset", "--hard", old)
+        self.git.side_effect = lambda path, *args: "" if args[0] == "fetch" else repository_git_output(path, *args)
+        return repository_git_output, old, target
+
+    def test_sync_uses_remote_tracking_ref_despite_same_name_tag(self):
+        git, old, target = self.real_revision_fixture()
+        git(self.path, "update-ref", "refs/remotes/origin/main", target)
+        git(self.path, "tag", "origin/main", old)
+        result = incremental.sync_repository(self.db, self.repo_id)
+        self.assertTrue(result["changed"])
+        self.assertEqual(result["new_commit"], target)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "actual_target")
+
+    def test_tag_cannot_substitute_for_missing_remote_tracking_ref(self):
+        git, old, target = self.real_revision_fixture()
+        git(self.path, "tag", "origin/main", target)
+        with self.assertRaises(subprocess.CalledProcessError):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, old)
+        self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
+        self.delete.assert_not_called()
+
     def test_discovery_error_aborts_ingestion_without_committing_or_preserving_clone(self):
         destination = self.root / "owner" / "scan-failed"
         with patch.object(repository, "git_output"), \

@@ -171,7 +171,9 @@ def _sync_repository(
         old_commit = run_git(
             repository_path,
             "rev-parse",
-            "HEAD",
+            "--verify",
+            "--end-of-options",
+            "HEAD^{commit}",
         )
 
     branch = repository.default_branch
@@ -187,7 +189,9 @@ def _sync_repository(
     new_commit = run_git(
         repository_path,
         "rev-parse",
-        f"origin/{branch}",
+        "--verify",
+        "--end-of-options",
+        f"refs/remotes/origin/{branch}^{{commit}}",
     )
 
     if old_commit == new_commit:
@@ -213,6 +217,7 @@ def _sync_repository(
         "-z",
         old_commit,
         new_commit,
+        "--",
     )
 
     changes = parse_git_diff(

@@ -108,3 +108,19 @@ sanitized. Timeout behavior is unchanged.
 A real temporary Git rename test covers CR/CRLF paths through diff, reset,
 metadata/journal preparation, injected publication failure and recovery. The
 runner regression failed before the fix and passes afterward.
+
+## Explicit commit and remote-ref resolution
+
+Sync resolves `refs/remotes/origin/<branch>^{commit}` with `rev-parse --verify
+--end-of-options`. This prevents a same-name `origin/<branch>` tag from taking
+precedence over the remote-tracking branch or substituting when that branch is
+missing. Current HEAD resolution likewise verifies a commit. Diff arguments end
+with `--` to separate the two revisions from any pathspec interpretation.
+The selected branch and fetch/checkpoint recovery policy are unchanged.
+
+Git's [revision rules](https://git-scm.com/docs/git-rev-parse) document ambiguous
+ref precedence and commit verification. A real temporary Git fixture reproduced
+incorrect `changed=false` with a colliding tag before the fix. Regression tests
+now verify the remote target is selected and a missing remote ref fails before
+reset, metadata publication or checkpoint advancement. Read-only HEAD checks
+matched all six local clones. No live fetch/reset was performed during validation.

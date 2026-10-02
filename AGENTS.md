@@ -1192,3 +1192,18 @@ rows, empty hits and benchmark bypass are unchanged. See cache-consistency.
 retained generation, healthy refill and TTL; both private keys removed. No live
 search-cache/corpus/settings/API changes. Retrieval/ranking unchanged; previous
 quality evaluation remains applicable, with no new evaluation/performance claim.
+
+## Latest milestone: explicit Git commit resolution (2026-10-02)
+
+Sync verifies the fully qualified remote-tracking ref as a commit rather than
+ambiguous origin/branch shorthand. HEAD lookup also verifies commit identity;
+diff separates revisions/pathspecs with trailing --. Reproduced a colliding
+origin/main tag causing incorrect changed=false before the fix; real Git tests
+now select the remote target and reject a tag-only substitute for missing remote
+ref before mutation. Branch/fetch/checkpoint recovery policy unchanged. See
+Git execution documentation.
+
+270 offline tests pass. Read-only HEAD compatibility matched all six local clones.
+Live CPU/one-thread evaluation: 25 valid cases, all baseline metrics reproduced,
+hybrid Recall@10 .880 / MRR .499. No live fetch/reset, corpus/cache/settings/API
+changes or new performance claim.
