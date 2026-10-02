@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     database_url: str
     elasticsearch_url: str
+    elasticsearch_close_search_connections: bool = False
     redis_url: str
 
     search_cache_ttl: int = 300

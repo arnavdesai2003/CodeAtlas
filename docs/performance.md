@@ -508,3 +508,110 @@ so no new retrieval evaluation or HTTP improvement is claimed. The next targeted
 investigation is server/transport tracing of requests immediately after search,
 including response-size and connection behavior, while preserving generation
 consistency. Cache-miss coalescing remains separate.
+
+## Search response connection workaround (2026-10-01)
+
+Response-size and connection controls now reproduce the resolution penalty
+without loading an embedding model. The new read-only
+`scripts.profile_search_transport` captures the current production BM25 query
+parameters, retrieves 40 candidates for the same ten queries, and times the
+following alias lookup. It compares complete hits for full/gzip/closed-connection
+requests, fails on exceptions or changed hits/routing/identity/count, and never
+uses Redis. Run without concurrent writers/publication. Source-free and zero-hit
+requests are diagnostic controls only, never production retrieval changes.
+
+### Component diagnostic (not HTTP)
+
+macOS 26.6 arm64, Python 3.13.15, existing Docker Elasticsearch 9.4.3; five
+excluded warm-ups and 30 measured search/lookup pairs per block. All 210 measured
+pairs succeeded. Decoded bytes are the node's response-body length after
+HTTP decompression, not packet bytes. `took` is Elasticsearch's reported search
+time; client search includes network, decompression/deserialization and client
+overhead. Neither includes the subsequent alias lookup.
+
+| Control | Decoded response bytes avg | Search client avg ms | ES took avg ms | Following alias avg ms | Alias p95 ms |
+|---|---:|---:|---:|---:|---:|
+| Full source | 75,293.2 | 4.645 | 2.433 | 16.294 | 22.866 |
+| No source | 2,664.4 | 1.632 | .367 | .617 | 1.068 |
+| Exclude embedding | 75,293.2 | 3.522 | 1.467 | 15.471 | 22.715 |
+| Zero hits | 161.9 | 1.009 | .000 | .575 | .773 |
+| Gzip (response encoding verified) | 75,293.2 | 4.063 | 1.067 | 16.470 | 22.346 |
+| Close search connection | 75,293.2 | 2.031 | .567 | 1.150 | 1.539 |
+| Full source, closing control | 75,293.2 | 2.701 | .967 | 13.811 | 21.226 |
+
+The source-free response avoided the delay; gzip did not. Excluding embedding
+made no byte difference on these existing responses. Closing the **preceding
+search** connection avoided the delay while returning exactly the same hits.
+A temporary separate control opened a fresh alias client after each search and
+still measured 14.766 ms average, versus .958 ms after closing the search
+connection. Thus simply reconnecting the resolver does not reproduce the benefit.
+
+This narrows the observed behavior to search-response/connection sequencing on
+this transport. There is no packet or server-dispatch trace establishing a
+unique TCP, Docker or Elasticsearch cause; none is claimed. The small `took`
+values also do not measure subsequent alias server dispatch.
+
+### Opt-in application setting and matched uncached HTTP
+
+`ELASTICSEARCH_CLOSE_SEARCH_CONNECTIONS=true` sets `Connection: close` only on
+BM25/vector search requests. Both hybrid branches still use the same resolved
+concrete index. Alias lookups and writer requests retain connection reuse;
+result fields, ranking, candidate limits and query text are unchanged. Default
+is false, preserving existing deployment behavior. Restart the API to change
+it. `.env` was not modified. This is a measured local workaround with a
+concurrency tradeoff, not a universal transport recommendation.
+
+Matched runs used CPU embeddings, `TORCH_NUM_THREADS=1`, cached offline weights,
+one Uvicorn process, loopback port 8001, no access logs and no proxy headers.
+Each run used the unchanged guarded-bypass workload: ten queries, limit 10,
+200 measured requests at each concurrency 1/5/10/20, excluded warm-ups and
+bypass acknowledgement. No other diagnostic/evaluation ran alongside HTTP.
+Order was before/default → temporary experimental header control → implemented
+opt-in A → implemented opt-in B → after/default closing control. The two opt-in
+runs reused the same server; the final control restarted only the temporary
+server with the setting false. Existing port 8000 was never restarted.
+
+| Run | Workers | req/s | HTTP avg ms | HTTP p95 ms | HTTP p99 ms |
+|---|---:|---:|---:|---:|---:|
+| Before/default | 1 | 25.72 | 38.783 | 52.909 | 54.806 |
+| Before/default | 5 | 144.30 | 34.250 | 50.700 | 56.867 |
+| Before/default | 10 | 154.16 | 63.954 | 81.216 | 88.929 |
+| Before/default | 20 | 159.64 | 122.411 | 148.753 | 154.929 |
+| Opt-in A | 1 | 119.42 | 8.312 | 9.532 | 11.850 |
+| Opt-in A | 5 | 168.97 | 29.459 | 34.045 | 41.989 |
+| Opt-in A | 10 | 145.35 | 68.169 | 79.433 | 87.239 |
+| Opt-in A | 20 | 133.48 | 147.546 | 216.927 | 256.676 |
+| Opt-in B | 1 | 119.18 | 8.328 | 9.466 | 11.232 |
+| Opt-in B | 5 | 172.33 | 28.905 | 32.694 | 34.678 |
+| Opt-in B | 10 | 143.68 | 68.988 | 80.344 | 88.516 |
+| Opt-in B | 20 | 144.26 | 136.596 | 162.363 | 171.464 |
+| After/default control | 1 | 24.81 | 40.221 | 52.967 | 55.488 |
+| After/default control | 5 | 128.31 | 38.569 | 47.593 | 48.336 |
+| After/default control | 10 | 158.25 | 62.193 | 87.012 | 90.698 |
+| After/default control | 20 | 148.94 | 131.189 | 204.546 | 213.161 |
+
+All four tabled runs had 800 successes, zero failures and zero cache hits
+(3,200 measured successes). The separate experimental header control also had
+800 successes/zero hits; its 1/5/10/20 throughput was 121.00/169.98/145.48/134.44
+req/s, average latency 8.202/29.178/68.072/146.454 ms and p95
+9.183/33.873/78.582/211.860 ms. It is supporting experimental evidence, not an
+additional implementation run.
+
+Single-worker average latency improved from 38.8–40.2 ms to 8.3 ms in the two
+implemented opt-in runs. Five-worker throughput improved, but ten-worker
+throughput was lower in both, and twenty-worker throughput was lower than both
+controls. Tail latency at twenty varied materially. Reconnecting search sockets
+adds overhead and trades connection reuse for this local low-concurrency
+benefit. These short runs do not establish sustained capacity, remote/TLS
+behavior, benefits on other hosts, or a general default change. No warm-cache
+improvement is claimed; hits do not execute Elasticsearch search.
+
+124 offline tests passed, including identical query/results and concrete
+index pinning with the setting off/on, and propagation of transport failures.
+Opt-in CPU/one-thread multi-repository evaluation had 25 valid/zero invalid
+cases and reproduced every baseline metric, including hybrid Recall@10 .880
+and MRR .499. Live legacy routing, UUID and 4,340-document count were unchanged;
+no corpus/index/cache was modified, no infrastructure was added, and the
+port 8001 server was stopped after measurement. Defaults and port 8000 remain
+unchanged. Further work should identify the transport cause or test workload
+choices before changing defaults; cache-miss coalescing remains separate.

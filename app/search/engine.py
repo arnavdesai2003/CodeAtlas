@@ -52,6 +52,15 @@ def resolve_search_index() -> str:
     )
 
 
+def _search_client() -> Elasticsearch:
+    client = elasticsearch_client.options(request_timeout=60)
+    if settings.elasticsearch_close_search_connections:
+        # Opt-in workaround for measured response/keep-alive delays on the
+        # local Docker transport. Alias resolution and writers retain pooling.
+        client = client.options(headers={"connection": "close"})
+    return client
+
+
 # ---------------------------------------------------------------------
 # Test-code detection
 # ---------------------------------------------------------------------
@@ -660,10 +669,7 @@ def bm25_search(
         }
 
     response = (
-        elasticsearch_client
-        .options(
-            request_timeout=60
-        )
+        _search_client()
         .search(
             index=index_name or resolve_search_index(),
             size=limit,
@@ -722,10 +728,7 @@ def semantic_search(
         }
 
     response = (
-        elasticsearch_client
-        .options(
-            request_timeout=60
-        )
+        _search_client()
         .search(
             index=index_name or resolve_search_index(),
             size=limit,

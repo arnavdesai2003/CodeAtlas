@@ -25,6 +25,38 @@ def missing_alias():
 
 
 class RoutingTests(unittest.TestCase):
+    def test_close_search_connections_preserves_hits_queries_and_generation(self):
+        hit = {"_score": 1.5, "_source": {
+            "repository": "repo", "path": "m.py", "name": "f",
+            "qualified_name": "f", "kind": "function", "start_line": 1,
+            "end_line": 2, "code": "def f(): pass"}}
+        observations = []
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled), \
+                 patch.object(engine.settings, "elasticsearch_close_search_connections", enabled), \
+                 patch.object(engine, "elasticsearch_client") as es, \
+                 patch.object(engine, "embed_text", return_value=[.1]*384):
+                es.options.return_value = es
+                es.indices.get_alias.return_value = {"pinned": {"aliases": {}}}
+                es.search.return_value = {"hits": {"hits": [hit]}}
+                result = engine.hybrid_search_weighted("q", 10)
+                self.assertEqual(es.indices.get_alias.call_count, 1)
+                calls = sorted([c.kwargs for c in es.search.call_args_list], key=lambda c: "knn" in c)
+                self.assertEqual([c["index"] for c in calls], ["pinned", "pinned"])
+                headers = [c.kwargs["headers"] for c in es.options.call_args_list if "headers" in c.kwargs]
+                self.assertEqual(headers, [{"connection": "close"}]*2 if enabled else [])
+                observations.append((result, calls))
+        self.assertEqual(observations[0], observations[1])
+
+    def test_close_search_connections_does_not_hide_transport_failure(self):
+        with patch.object(engine.settings, "elasticsearch_close_search_connections", True), \
+             patch.object(engine, "elasticsearch_client") as es:
+            es.options.return_value = es
+            es.search.side_effect = ConnectionError("outage")
+            with self.assertRaises(ConnectionError):
+                engine.bm25_search("q", index_name="pinned")
+            es.indices.get_alias.assert_not_called()
+
     def test_missing_alias_falls_back_to_legacy_without_creating_index(self):
         with patch.object(engine, "elasticsearch_client") as es:
             es.indices.get_alias.side_effect = missing_alias()

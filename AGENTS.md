@@ -406,3 +406,34 @@ metadata or API processes changed; no new retrieval-quality or performance gain
 claim. Next targeted investigation: server/transport tracing after search,
 including response size and connection behavior, while preserving per-request
 concrete generation consistency. Cache-miss coalescing remains separate.
+
+## Latest milestone: opt-in search connection workaround (2026-10-01)
+
+Read-only `scripts.profile_search_transport` isolates response-size/connection
+controls without loading models. Full BM25 responses averaged 75 KB and were
+followed by 14–16 ms alias lookups; source-free controls averaged 2.7 KB/.617 ms.
+Gzip did not remove the delay. Closing the preceding search connection reduced
+following alias lookup to 1.150 ms with identical complete hits. Fresh alias
+connections alone did not help. No unique TCP/Docker/server cause is established;
+see `docs/performance.md` for diagnostics and limits.
+
+Optional `ELASTICSEARCH_CLOSE_SEARCH_CONNECTIONS=true` closes only BM25/vector
+search connections. Default false preserves deployment behavior; restart to
+change it. Alias resolution/writers retain pooling, and both parallel branches
+still pin one concrete generation. No source fields, ranking or candidates were
+changed. CPU/one-thread matched uncached HTTP: before/default and closing
+control averaged 38.783/40.221 ms at one worker; implemented opt-in runs
+8.312/8.328 ms. Ten-worker opt-in throughput 145.35/143.68 req/s versus
+154.16/158.25 controls; twenty-worker 133.48/144.26 versus 159.64/148.94.
+The low-concurrency benefit has a throughput tradeoff; do not enable by default
+or generalize to remote/TLS/other hosts. Four matched runs had 3,200 successes,
+zero failures and zero cache hits; an extra header experiment is recorded
+separately. No warm-cache or sustained-capacity improvement claim.
+
+124 offline tests pass. Opt-in evaluation: all 25 valid cases, every baseline
+metric reproduced, hybrid Recall@10 .880 / MRR .499. Read-only live routing/UUID/
+count unchanged at legacy 4,340 documents. `.env`, default settings, corpus,
+cache and existing port 8000 unchanged; temporary port 8001 server stopped.
+No infrastructure added. Next investigation: identify the transport cause or
+validate workload-specific choices before changing defaults. Cache-miss
+coalescing remains separate.

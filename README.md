@@ -210,6 +210,18 @@ diagnostic times lookups after embedding or retrieval, and compares other
 Elasticsearch endpoints and a separate connection pool. It bypasses Redis by
 calling the engine directly; these measurements are not HTTP or capacity results.
 
+`scripts.profile_search_transport` adds response-size, gzip and connection-close
+controls without loading models. Source-free requests are diagnostic controls;
+production search always returns the same result fields.
+
+An optional local transport workaround, `ELASTICSEARCH_CLOSE_SEARCH_CONNECTIONS=true`,
+closes Elasticsearch connections after BM25/vector search responses. It preserves
+generation pinning and leaves alias/writer connection reuse enabled. On this Mac
+with local Docker it reduced single-worker uncached latency, but reduced throughput
+at higher concurrency. It defaults to false; restart the API to change it and
+benchmark your workload before choosing it. `.env` is unchanged. See the
+[measurements and tradeoff](docs/performance.md).
+
 Keep **warm-cache HTTP**, **uncached HTTP**, **direct engine**, and **component
 profiling** results separate. Short runs indicate a throughput knee, not a
 proven sustained capacity ceiling. See [measured results](docs/performance.md)
@@ -228,5 +240,5 @@ Elasticsearch publication remain separate commits; a batch is not one snapshot.
 Incremental sync updates the current index in place and can expose intermediate
 states while its recovery job is pending. Generation cleanup requires maintenance
 because readers have no leases. Simultaneous cache misses are not coalesced.
-Public deployment hardening and the measured alias-resolution latency regression
-remain unresolved.
+Public deployment hardening and the underlying transport cause of the measured
+resolution delay remain unresolved; an opt-in connection workaround is available.
