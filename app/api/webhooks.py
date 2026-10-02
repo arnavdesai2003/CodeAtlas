@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import json
 
 from fastapi import (
     APIRouter,
@@ -24,6 +25,8 @@ def verify_github_signature(
     payload: bytes,
     signature: str | None,
 ) -> None:
+    if not settings.github_webhook_secret:
+        raise HTTPException(status_code=503, detail="GitHub webhook is not configured.")
     if not signature:
         raise HTTPException(
             status_code=401,
@@ -39,7 +42,7 @@ def verify_github_signature(
         ).hexdigest()
     )
 
-    if not hmac.compare_digest(
+    if not signature.isascii() or not hmac.compare_digest(
         expected_signature,
         signature,
     ):
@@ -99,7 +102,12 @@ async def github_webhook(
         "X-GitHub-Event"
     )
 
-    payload = await request.json()
+    try:
+        payload = json.loads(payload_bytes)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail="Invalid webhook JSON.") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="Webhook payload must be an object.")
 
     # GitHub sends this when the webhook
     # is first configured.
@@ -120,11 +128,14 @@ async def github_webhook(
         {}
     )
 
+    if not isinstance(repository_data, dict):
+        raise HTTPException(status_code=400, detail="Webhook repository must be an object.")
+
     clone_url = repository_data.get(
         "clone_url"
     )
 
-    if not clone_url:
+    if not isinstance(clone_url, str) or not clone_url.strip():
         raise HTTPException(
             status_code=400,
             detail=(

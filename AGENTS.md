@@ -557,3 +557,20 @@ no measured requests. Timing and methodology are in `docs/performance.md`.
 Temporary port 8001 server stopped; port 8000, live cache generation, corpus,
 index/schema, .env/defaults untouched. Public deployment authentication and
 repository mutation failure disclosure remain separate priorities.
+
+## Latest milestone: fail-closed webhook verification (2026-10-01)
+
+GitHub webhook verification now rejects unset/empty secrets with HTTP 503 before
+signature parsing, JSON or DB work. An empty-key forged signature previously
+passed. Missing/invalid/non-ASCII signatures return 401; authenticated malformed
+JSON/non-object roots and malformed push repository/clone URL fields return 400
+without scheduling sync. Registered valid pushes, ping/ignored events, existing
+background sync, journaling and locks retain their behavior. Acceptance is not
+completion. See `docs/webhooks.md`.
+
+153 offline tests pass, including eight mocked webhook authentication/scheduling
+checks. No live webhook deliveries, database writes, clones, corpus/cache/index,
+.env/defaults or API process changes. Retrieval evaluation remains inherited
+from the prior milestone; no performance claim. This does not add public API
+authorization, replay deduplication, durable queues or request body bounds.
+Repository mutation error disclosure and deployment boundaries remain priorities.

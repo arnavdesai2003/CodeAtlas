@@ -72,6 +72,10 @@ and symbols, replaces affected Elasticsearch documents and invalidates search
 cache entries. It resets the generated clone to the fetched commit: do not
 edit generated clones. Signed push events to `/webhooks/github` trigger the
 same synchronization; set `GITHUB_WEBHOOK_SECRET` before using webhooks.
+An unset/empty secret disables webhook processing with HTTP 503. Missing or
+invalid signatures return 401 before JSON parsing; signed malformed payloads
+return 400 and do not schedule synchronization. See
+[webhook handling](docs/webhooks.md) for response semantics and limits.
 
 Sync records unfinished publication work in PostgreSQL and advances its
 checkpoint only after Elasticsearch updates and cache invalidation succeed.
