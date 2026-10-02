@@ -256,6 +256,9 @@ exclude stale target documents. PostgreSQL metadata, Redis cache visibility and
 Elasticsearch publication remain separate commits; a batch is not one snapshot.
 Incremental sync updates the current index in place and can expose intermediate
 states while its recovery job is pending. Generation cleanup requires maintenance
-because readers have no leases. Simultaneous cache misses are not coalesced.
+because readers have no leases. Simultaneous misses with exact query/limit and
+known generation share work within each API process, with bounded waits and
+independent fallback. See [cache coalescing](docs/cache-coalescing.md) for scope,
+failure behavior and the new `cache_coalesced`/`coalescing_wait_ms` fields.
 Public deployment hardening and the underlying transport cause of the measured
 resolution delay remain unresolved; an opt-in connection workaround is available.

@@ -31,7 +31,9 @@ These Lua operations target the existing standalone Redis deployment and require
 script execution permissions; they are not a Redis Cluster implementation.
 This prevents stale cache fills after successful invalidation. It does not
 cancel outstanding responses, make partial incremental Elasticsearch updates
-invisible, or coalesce concurrent misses. Full rebuilds now publish a staged
+invisible. A separate process-local layer now coalesces eligible simultaneous
+misses by exact query/limit/generation; see [cache coalescing](cache-coalescing.md).
+Full rebuilds now publish a staged
 index atomically; old cache hits remain possible until the subsequent rotation.
 See [atomic publication](atomic-publication.md). An already-running request may return old data,
 but cannot seed that data into the new cache generation.
@@ -42,6 +44,6 @@ The regression test invalidates inside a mocked retrieval, returns the old
 result, then confirms the next request retrieves fresh data and the following
 one hits it. It failed before this change. Other offline cases cover late
 writers, generation eviction, cleanup failures, malformed entries and outages.
-All 61 tests pass. An isolated live Redis namespace verified actual Lua reads,
+At that generation-fencing checkpoint, all 61 tests passed. An isolated live Redis namespace verified actual Lua reads,
 conditional fills, TTL, invalidation and metadata eviction; temporary keys were
 removed afterward. See [performance results](performance.md) for HTTP checks.

@@ -464,3 +464,45 @@ process changed. Existing opt-in flag remains false by default; no new retrieval
 quality or API performance claim. More precise attribution needs privileged packet
 or forwarding/server tracing; do not change defaults based on these component
 results. Cache-miss coalescing remains separate.
+
+## Latest milestone: bounded process-local miss coalescing (2026-10-01)
+
+Normal cache misses now share work for exact query text/limit/known Redis
+initial generation within one API process. One leader retrieves and fills with
+its original token; followers get independent result copies. A second leader
+read avoids late duplicate fills but never adopts a newer token. New generations
+cannot join old work. Completed flights are removed; no additional result cache
+or distributed lock. Registry maximum 128 keys; one-second follower wait budget
+then independent retrieval, without canceling/removing the leader. Saturated
+new keys retrieve independently. Unknown-generation and benchmark-bypass
+requests never join. Leader failures release followers and allow later retry.
+
+`POST /search` adds `cache_coalesced` and `coalescing_wait_ms`. Followers are
+`cache_hit=false`, have null engine timing and include their own waiting in
+search latency. Bypass client rejects coalesced responses. Existing Redis Lua
+fencing, normal cache-key normalization, retrieval text, ranking/candidates and
+index consistency remain unchanged. See `docs/cache-coalescing.md`.
+
+138 offline tests pass. Isolated real Redis verified old-leader/follower release,
+new-generation independent retrieval, old fill rejection and fresh entry retention;
+all temporary keys removed. Direct-service simultaneous-miss diagnostic (not
+HTTP/capacity), 20 callers × ten queries × two rounds: before/control 400 engine
+calls for 400 successes; after A/B 20 engine calls, 380 shared followers, zero
+Redis hits. Average caller ms 126.475/124.690 before/control versus 37.108/37.481
+after; 95% engine-call reduction is specific to this same-query burst workload.
+`scripts.benchmark_miss_burst` uses isolated random Redis namespaces, matching
+payload/cache checks and cleanup before final success reporting.
+
+Four matched warm HTTP runs had 3,200 successes, 100% hits; throughput varied,
+so no warm-cache improvement claim. Current guarded uncached HTTP had 800
+successes, zero hits/coalesced responses; no uncached speedup claim. Details:
+`docs/performance.md`. Temporary port 8001 server stopped; port 8000 untouched.
+CPU/one-thread evaluation reproduced every baseline, 25 valid cases, hybrid
+Recall@10 .880 / MRR .499. Read-only counts: six repositories / 4,340 PG symbols /
+4,340 ES documents, legacy routing. No reindexing, schema, infrastructure,
+ranking, .env or default device/transport changes. Normal HTTP warm-up may
+populate/refresh benchmark cache entries; no live flush/generation rotation.
+Coalescing is process-local, not a global capacity limit; slow leaders can trigger
+fallback duplication. Cross-process sharing and the precise forwarding-delay
+mechanism remain separate investigations; privileged tracing was unavailable at
+the prior milestone. Atomic metadata/cache/index visibility remains unresolved.

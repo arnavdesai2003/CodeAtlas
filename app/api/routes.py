@@ -195,6 +195,8 @@ def search_code(
         "cache_hit": search_result[
             "cache_hit"
         ],
+        "cache_coalesced": search_result.get("cache_coalesced", False),
+        "coalescing_wait_ms": search_result.get("coalescing_wait_ms", 0.0),
         "search_latency_ms": search_result[
             "search_latency_ms"
         ],

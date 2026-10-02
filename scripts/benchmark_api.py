@@ -92,6 +92,7 @@ async def run_request(client, query, uncached=False):
         if uncached and (
             response.headers.get("X-CodeAtlas-Cache-Bypassed") != "true"
             or payload["cache_hit"] is not False
+            or payload.get("cache_coalesced", False) is not False
             or engine_ms is None
         ):
             raise ValueError("Server did not confirm cache bypass")

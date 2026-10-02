@@ -703,3 +703,119 @@ was started/restarted and no container configuration changed. Retrieval code was
 unchanged, so no new quality evaluation or application HTTP gain is claimed.
 The earlier opt-in workaround and measured throughput tradeoff remain unchanged;
 cache-miss coalescing remains a separate investigation.
+
+## Process-local simultaneous miss coalescing (2026-10-01)
+
+Normal cache misses now share in-flight work for exact query text, limit and
+known Redis generation within one API process. Followers have a one-second
+wait budget before independent retrieval; at most 128 active keys are retained.
+Unknown-generation requests and guarded benchmark bypass remain independent.
+Redis hits do not enter the registry. See [coalescing behavior](cache-coalescing.md)
+for bounds, failure handling, generation fencing and API timing attribution.
+Ranking, corpus, candidates, weights, model/device defaults and index publication
+are unchanged. No infrastructure or distributed locking was added.
+
+### Direct-service miss bursts (not HTTP or capacity)
+
+New `scripts.benchmark_miss_burst` uses an unpredictable isolated Redis namespace,
+never flushes live cache, and removes its temporary keys. It warms the same ten
+queries through the engine, then runs two rounds of ten bursts. Each burst
+releases twenty callers of one unchanged query/limit 10 with a barrier. The
+private generation is rotated between completed bursts, outside measured time,
+to create real simultaneous misses without changing query text. Engine calls
+are instrumented and result/cache payload equality is checked for every burst.
+Timing excludes local worker startup/barrier waiting. These 400-request runs
+are deliberately different from the standard 200-request HTTP workload.
+
+macOS 26.6 arm64, Python 3.13.15, CPU MiniLM, `TORCH_NUM_THREADS=1`, cached offline
+weights, Elasticsearch 9.4.3, Redis 7 and unchanged default search connection
+reuse. Before/control loaded archived `f194b69` app sources first on PYTHONPATH;
+output recorded the loaded service path. No .env file or secret was copied.
+Order: archived before → after A → after B → archived closing control.
+
+| Run | Successful requests | Real engine calls | Shared followers | Redis hits | Avg caller ms | p95 caller ms |
+|---|---:|---:|---:|---:|---:|---:|
+| Before | 400 | 400 | 0 | 0 | 126.475 | 156.416 |
+| After A | 400 | 20 | 380 | 0 | 37.108 | 45.037 |
+| After B | 400 | 20 | 380 | 0 | 37.481 | 46.693 |
+| Control | 400 | 400 | 0 | 0 | 124.690 | 149.765 |
+
+All 1,600 requests succeeded and every burst had matching results/cache fills.
+The implemented runs reduced engine calls by 95% for this same-query burst
+workload. Shared followers remain cache misses (`cache_hit=false`) and do not
+borrow the leader's engine duration. This does not imply a 95% reduction for
+mixed queries, multiple API processes, Redis outages, slow leaders that trigger
+fallback, or a sustained capacity improvement. Single eligible misses add a
+second Redis read and leader result copying. No ordinary single-miss HTTP
+latency improvement is claimed.
+
+A small post-cleanup-reporting smoke run (two callers, ten bursts) had 20
+successes/ten engine calls/ten shared followers and confirmed the script only
+reports completed success after namespace deletion. All benchmark/race namespaces
+were removed. An isolated real Redis interleaving with mocked retrieval held an
+old leader/follower, rotated generation, retrieved fresh work separately and
+then released old work: new fill accepted, old fill rejected by Lua, fresh
+entry retained and registry empty. No live generation was rotated by these
+fixtures.
+
+### Warm-cache HTTP and guarded bypass (separate measurements)
+
+Loopback port 8001, one Uvicorn process, no access logs/proxy headers, same
+CPU/one-thread settings, ten unchanged queries, limit 10 and 200 measured
+requests at concurrency 1/5/10/20. Warm-ups/preflight were excluded. Warm-cache
+order: archived before → current after A → current after B → current uncached
+verification → archived closing warm control. No other timed diagnostic or
+evaluation ran alongside these HTTP measurements.
+
+| Warm run | Workers | req/s | HTTP avg ms | HTTP p95 ms | HTTP p99 ms |
+|---|---:|---:|---:|---:|---:|
+| Before | 1 | 66.01 | 15.058 | 15.988 | 16.512 |
+| Before | 5 | 348.76 | 14.223 | 22.923 | 32.254 |
+| Before | 10 | 663.58 | 14.461 | 20.963 | 33.657 |
+| Before | 20 | 972.59 | 19.924 | 36.350 | 40.778 |
+| After A | 1 | 65.84 | 15.090 | 15.989 | 16.163 |
+| After A | 5 | 334.49 | 14.648 | 25.994 | 31.156 |
+| After A | 10 | 674.70 | 14.594 | 23.341 | 46.991 |
+| After A | 20 | 936.63 | 20.537 | 43.080 | 56.539 |
+| After B | 1 | 65.23 | 15.228 | 15.987 | 17.195 |
+| After B | 5 | 350.76 | 13.957 | 18.637 | 29.420 |
+| After B | 10 | 644.57 | 15.025 | 20.479 | 23.636 |
+| After B | 20 | 1041.82 | 18.159 | 32.734 | 39.251 |
+| Control | 1 | 65.69 | 15.128 | 16.034 | 16.552 |
+| Control | 5 | 338.12 | 14.559 | 19.161 | 29.080 |
+| Control | 10 | 672.96 | 14.567 | 25.377 | 66.874 |
+| Control | 20 | 781.08 | 23.042 | 56.565 | 68.336 |
+
+All four warm runs had 800 successes, zero failures and 100% Redis hits (3,200
+measured successes). Single-worker latency stayed near 15 ms; high-concurrency
+throughput/tails varied across controls and after runs. These observations do
+not establish a warm-cache performance improvement. Normal warm-up can populate
+or refresh the ten benchmark entries; live Redis was not flushed or invalidated.
+
+| Current uncached verification | req/s | HTTP avg ms | HTTP p95 ms | HTTP p99 ms |
+|---|---:|---:|---:|---:|
+| 1 worker | 25.76 | 38.716 | 52.078 | 55.392 |
+| 5 workers | 140.53 | 35.056 | 49.060 | 57.990 |
+| 10 workers | 155.46 | 63.475 | 83.006 | 86.008 |
+| 20 workers | 146.89 | 133.278 | 204.932 | 226.205 |
+
+All 800 uncached requests succeeded with zero hits. The updated client rejects
+`cache_coalesced=true` on bypass, so none were accepted as shared work. This is
+bypass verification, not a matched before/after uncached speedup claim. Total
+HTTP successes across these five runs: 4,000; zero failures. The temporary
+server was stopped; port 8000 was not restarted.
+
+### Quality and limits
+
+138 offline tests pass, including deterministic stale-generation interleavings,
+bounded waiting/saturation, retry after leader errors (including TimeoutError),
+unknown tokens/Redis-write failure, empty/independent results, query/limit
+separation and API/bypass attribution. CPU/one-thread evaluation had all 25
+cases valid and reproduced every BM25/semantic/hybrid/reranked metric: hybrid
+Recall@10 .880 and MRR .499. Read-only stores confirmed six repositories,
+4,340 PostgreSQL symbols and 4,340 Elasticsearch documents on legacy routing.
+No corpus/index/schema/model/ranking or .env/default device/transport setting
+was changed. Generation Lua protocol and maintenance/quiescence requirements
+remain unchanged. Process-local sharing does not address cross-process misses
+or atomic metadata/cache/index visibility. The forwarding-delay mechanism still
+requires additional tracing; no Docker/kernel settings were changed.

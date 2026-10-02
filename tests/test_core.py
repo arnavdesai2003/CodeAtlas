@@ -116,6 +116,17 @@ class ApiTests(unittest.TestCase):
         self.assertNotIn("X-CodeAtlas-Cache-Bypassed", response.headers)
         self.search.assert_called_once_with(query="q", limit=10, bypass_cache=False)
 
+    def test_coalesced_response_distinguishes_wait_from_cache_and_engine(self):
+        self.search.return_value = {
+            "results": [], "cache_hit": False, "cache_coalesced": True,
+            "search_latency_ms": 4.5, "coalescing_wait_ms": 3.2,
+        }
+        result = self.client.post("/search", json={"query": "q"}).json()
+        self.assertFalse(result["cache_hit"])
+        self.assertTrue(result["cache_coalesced"])
+        self.assertEqual(result["coalescing_wait_ms"], 3.2)
+        self.assertIsNone(result["elasticsearch_latency_ms"])
+
     def test_bypass_requires_opt_in_development_and_loopback(self):
         for enabled, environment, host in [
             (False, "development", "127.0.0.1"),
@@ -254,6 +265,15 @@ class BenchmarkTests(unittest.IsolatedAsyncioTestCase):
             )) as client:
                 result = await benchmark_api.run_request(client, "unchanged", uncached=True)
             self.assertEqual(result.error is None, acknowledged and not hit)
+
+    async def test_uncached_rejects_coalesced_response(self):
+        async with httpx.AsyncClient(base_url="http://test", transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, headers={"X-CodeAtlas-Cache-Bypassed": "true"},
+                json={"results": [], "cache_hit": False, "cache_coalesced": True,
+                      "search_latency_ms": 2, "elasticsearch_latency_ms": 1})
+        )) as client:
+            result = await benchmark_api.run_request(client, "q", uncached=True)
+        self.assertEqual(result.error, "Invalid search response")
 
     async def test_timeout_and_http_failure_are_counted(self):
         def timeout(request):
