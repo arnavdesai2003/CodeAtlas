@@ -586,7 +586,25 @@ def index_files_in_elasticsearch(
 def _complete_hits(response) -> list[dict]:
     if response.get("timed_out") or response.get("_shards", {}).get("failed", 0):
         raise IncompleteSearchError("Elasticsearch search did not complete.")
-    return response["hits"]["hits"]
+    payload = response.get("hits")
+    if not isinstance(payload, dict) or not isinstance(payload.get("hits"), list):
+        raise InvalidSearchResponseError("Invalid retrieval hit collection.")
+    return payload["hits"]
+
+
+def _validate_hit_source(source) -> None:
+    if not isinstance(source, dict):
+        raise InvalidSearchResponseError("Invalid retrieval document.")
+    for field in ("repository", "path", "name", "qualified_name", "kind", "code"):
+        if not isinstance(source.get(field), str):
+            raise InvalidSearchResponseError("Invalid retrieval document field.")
+    start, end = source.get("start_line"), source.get("end_line")
+    if type(start) is not int or type(end) is not int or start < 1 or end < start:
+        raise InvalidSearchResponseError("Invalid retrieval line range.")
+    if source.get("language") is not None and not isinstance(source["language"], str):
+        raise InvalidSearchResponseError("Invalid retrieval language.")
+    if type(source.get("is_test", False)) is not bool:
+        raise InvalidSearchResponseError("Invalid retrieval test flag.")
 
 
 def _format_hits(
@@ -598,8 +616,12 @@ def _format_hits(
 
     results = []
 
+    if not isinstance(hits, list):
+        raise InvalidSearchResponseError("Invalid retrieval hit collection.")
     for hit in hits:
-        source = hit["_source"]
+        if not isinstance(hit, dict):
+            raise InvalidSearchResponseError("Invalid retrieval hit.")
+        source = hit.get("_source")
         score = hit.get("_score")
         if score is None:
             score = 0.0
@@ -611,6 +633,7 @@ def _format_hits(
             raise InvalidSearchResponseError("Retrieval score overflow.") from exc
         if not math.isfinite(score):
             raise InvalidSearchResponseError("Invalid retrieval score.")
+        _validate_hit_source(source)
 
         results.append(
             {

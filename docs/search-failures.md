@@ -107,3 +107,23 @@ and overlapping predictions without loading real models. Real 25-case evaluation
 reproduced reranked metrics. No concurrent production cold-start incident or
 throughput improvement was measured. Default API reranking stays disabled, and
 model/device/thread settings are unchanged.
+
+## Malformed Elasticsearch hits
+
+Retrieval now checks the hit collection and each source document before constructing
+results. Required textual fields must be strings; line numbers must be integer
+values with a positive start and end at least start. Optional language remains
+nullable or textual, and the test flag must be boolean when present. Missing
+language/test flag retain their existing defaults. Invalid collections, missing
+sources or wrong field types raise `InvalidSearchResponseError` through the
+existing sanitized HTTP 503 handler instead of raw lookup failures or malformed
+successful results.
+
+Failure in any hit rejects that retrieval result set; no partial cache fill or
+surviving hybrid branch is returned. Miss-flight state is released for retry.
+Valid hit formatting, scores, ranking and source text remain unchanged. This
+validates newly retrieved hits, not the full schema of existing Redis entries,
+and does not certify source-content correctness or repository permissions.
+Offline tests cover collections, required/optional fields, line ranges and
+cache/retry behavior. Live evaluation reproduced all baseline metrics with 25
+valid cases; no malformed live documents were observed or repaired.

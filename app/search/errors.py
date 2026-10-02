@@ -6,7 +6,7 @@ class IncompleteSearchError(RuntimeError):
 
 
 class InvalidSearchResponseError(IncompleteSearchError):
-    """Retrieval scores cannot be safely formatted or normalized."""
+    """Retrieval hits or scores cannot be safely formatted or normalized."""
 
 
 class InvalidQueryEmbeddingError(IncompleteSearchError):

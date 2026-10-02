@@ -1207,3 +1207,18 @@ Git execution documentation.
 Live CPU/one-thread evaluation: 25 valid cases, all baseline metrics reproduced,
 hybrid Recall@10 .880 / MRR .499. No live fetch/reset, corpus/cache/settings/API
 changes or new performance claim.
+
+## Latest milestone: retrieval hit validation (2026-10-02)
+
+Retrieval validates hit collections/source fields and line ranges before result
+construction. Required strings, integer positive/ordered lines, optional nullable
+language and boolean test flag are checked. Invalid hits raise typed existing
+sanitized backend errors rather than lookup exceptions or malformed successes;
+cache fill is skipped and miss-flight state released. Valid formatting/defaults,
+scores and ranking unchanged. Existing Redis entries are not fully schema
+validated by this change. See search-failures documentation.
+
+273 offline tests pass. Live CPU/one-thread evaluation: 25 valid cases, all
+baseline metrics reproduced, hybrid Recall@10 .880 / MRR .499. No malformed live
+document observed/repaired, no corpus/cache/settings/API process changes or
+performance claim. Existing coalescing timeout behavior needed no change.

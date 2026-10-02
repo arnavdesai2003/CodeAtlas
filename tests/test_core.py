@@ -313,6 +313,42 @@ class ApiTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_malformed_hit_collections_fail_with_typed_error(self):
+        for response in ({}, {"hits": None}, {"hits": {}}, {"hits": {"hits": {}}}):
+            with self.subTest(response=response), self.assertRaises(InvalidSearchResponseError):
+                engine._complete_hits(response)
+        for hits in (None, {}, [None], [{}]):
+            with self.subTest(hits=hits), self.assertRaises(InvalidSearchResponseError):
+                engine._format_hits(hits)
+
+    def test_malformed_source_fields_fail_before_result_construction(self):
+        valid = dict(repository="r", path="f.py", name="f", qualified_name="f",
+                     kind="function", start_line=1, end_line=2, code="def f(): pass")
+        changes = [{field: None} for field in ("repository", "path", "name", "qualified_name", "kind", "code")]
+        changes += [{"start_line": True}, {"start_line": 0}, {"end_line": "2"},
+                    {"end_line": 0}, {"language": []}, {"is_test": 1}]
+        for change in changes:
+            with self.subTest(change=change), self.assertRaises(InvalidSearchResponseError):
+                engine._format_hits([{"_source": {**valid, **change}}])
+        result = engine._format_hits([{"_source": valid}])[0]
+        self.assertEqual(result["score"], 0)
+        self.assertIsNone(result["language"])
+        self.assertIs(result["is_test"], False)
+
+    def test_malformed_source_never_fills_cache_and_releases_flight(self):
+        with patch.object(engine, "elasticsearch_client") as es, \
+             patch.object(service, "get_cached_search", return_value=cache.CacheLookup(generation="g")), \
+             patch.object(service, "set_cached_search") as write, \
+             patch.object(service, "search_code", side_effect=lambda **kw: engine.bm25_search(**kw, index_name="fixed")):
+            es.options.return_value.search.return_value = {"hits": {"hits": [{"_source": {}}]}}
+            with self.assertRaises(InvalidSearchResponseError):
+                service.search_with_cache("q", 10)
+            write.assert_not_called()
+            self.assertFalse(service._miss_flights._pending)
+            es.options.return_value.search.return_value = {"hits": {"hits": []}}
+            self.assertEqual(service.search_with_cache("q", 10)["results"], [])
+            write.assert_called_once()
+
     def test_invalid_query_vectors_never_search_or_fill_cache_and_can_retry(self):
         for vector in (None, [0.1] * 383, [float("nan")] * 384,
                        [float("inf")] * 384, [True] * 384, ["0.1"] * 384,
