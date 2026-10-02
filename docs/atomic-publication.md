@@ -156,3 +156,19 @@ hybrid engine invocation; warm cache hits bypass the engine. See
 - Dedicated loopback port 8001 was used for before/after uncached HTTP runs;
   normal port 8000 was not restarted. No Redis flush or default device/thread
   change was made. The temporary benchmark server is stopped after verification.
+
+### Database acknowledgement loss
+
+A database error can follow a successful commit. Fresh-session offline tests
+cover committed `ready` and `published` records whose acknowledgements are lost.
+A ready retry revalidates and switches the same stage without copying/indexing
+again. A published retry preserves the first publication timestamp, performs
+strict cache rotation and removes the journals without another alias switch.
+
+If the final journal-removal commit succeeded before acknowledgement loss, the
+active alias and published lifecycle record remain, and both publication/full
+journals are absent. Inspect durable state before treating this as pending work.
+Another full Elasticsearch indexing command with no journal starts a new rebuild;
+it cannot reconstruct the lost response as an idempotent retry. Do not manually
+rewind aliases or recreate journals. Tests verify SQLite application transaction
+logic with mocked Elasticsearch/Redis, not PostgreSQL network failure.

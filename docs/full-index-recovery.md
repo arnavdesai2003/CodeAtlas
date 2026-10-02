@@ -94,3 +94,10 @@ final-commit failure. No live corpus rebuild is needed to validate these faults.
 - Docker Desktop and the existing three service containers were started for
   verification. No API server was restarted or benchmark server launched.
   No latency benchmark or performance improvement is claimed.
+
+A lost acknowledgement after successful symbol-snapshot commit leaves the full
+job and committed symbol IDs intact. A fresh-session symbol-indexing retry returns
+that pending snapshot without parsing changed source again. An error alone is
+not evidence that replacement rolled back. Full publication has separate commit
+boundaries; see [database acknowledgement loss](atomic-publication.md#database-acknowledgement-loss)
+for recovery and the completed-job retry limitation.

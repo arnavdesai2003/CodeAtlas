@@ -1006,3 +1006,18 @@ unchanged-remote retry performs no repeated publication or invalidation. See
 232 offline tests pass. No production changes were needed, no live stores or
 running processes changed, and no new retrieval/performance claims were made.
 SQLite tests exercise application recovery rather than PostgreSQL network loss.
+
+## Latest milestone: ambiguous full-publication commit coverage (2026-10-02)
+
+Added fresh-session tests for successful full symbol snapshot, ready stage,
+published lifecycle and final journal deletion commits followed by lost
+acknowledgements. Symbol IDs survive without reparsing; ready stages resume
+without copy/index work; published stages finalize without a second alias switch
+and retain the first publication timestamp. Completed final commits leave both
+journals absent and published audit intact. A new full-index command after that
+completion starts a new rebuild, rather than reconstructing the lost response.
+See full-index/atomic-publication documentation before interpreting an error as
+pending work. Tests use SQLite transactions and mocked Elasticsearch/Redis.
+
+236 offline tests pass. No production behavior, live stores, settings or running
+processes changed; no new retrieval or performance claims.

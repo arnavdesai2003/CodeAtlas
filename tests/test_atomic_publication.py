@@ -371,6 +371,70 @@ class AtomicPublicationTests(unittest.TestCase):
         self.es.reindex.assert_not_called()
         self.assertIsNone(self.journal())
 
+    def lose_commit_ack(self, boundary):
+        commit = self.db.commit
+        calls = 0
+
+        def committed_but_lost():
+            nonlocal calls
+            calls += 1
+            commit()
+            if calls == boundary:
+                raise RuntimeError("lost publication commit acknowledgement")
+
+        with patch.object(self.db, "commit", side_effect=committed_but_lost):
+            with self.assertRaisesRegex(RuntimeError, "lost publication"):
+                self.publish()
+        self.db.close()
+
+    def test_lost_ready_ack_reuses_validated_stage_in_new_session(self):
+        self.lose_commit_ack(4)
+        phase, stage, _ = self.journal()
+        self.assertEqual(phase, "ready")
+        self.assertIsNone(self.alias)
+        with self.sessions() as retry:
+            result = self.publish(retry)
+            self.assertTrue(result["resumed"])
+            self.assertEqual(result["index"], stage)
+        self.es.reindex.assert_called_once()
+        self.write.assert_called_once()
+        self.es.indices.update_aliases.assert_called_once()
+        self.invalidate.assert_called_once_with(strict=True)
+        self.assertIsNone(self.journal())
+
+    def test_lost_published_ack_only_finalizes_in_new_session(self):
+        self.lose_commit_ack(5)
+        phase, stage, _ = self.journal()
+        self.assertEqual(phase, "published")
+        self.assertEqual(self.alias, stage)
+        self.invalidate.assert_not_called()
+        with self.sessions() as retry:
+            published_at = retry.get(SearchIndexGeneration, stage).published_at
+            result = self.publish(retry)
+            self.assertTrue(result["resumed"])
+            self.assertEqual(retry.get(SearchIndexGeneration, stage).published_at, published_at)
+            self.assertIsNone(retry.get(RepositoryFullIndexJob, self.repo.id))
+        self.es.reindex.assert_called_once()
+        self.write.assert_called_once()
+        self.es.indices.update_aliases.assert_called_once()
+        self.invalidate.assert_called_once_with(strict=True)
+        self.assertIsNone(self.journal())
+
+    def test_lost_final_ack_leaves_completed_publication_durable(self):
+        self.lose_commit_ack(6)
+        self.assertIsNone(self.journal())
+        with self.sessions() as verify:
+            self.assertIsNone(verify.get(RepositoryFullIndexJob, self.repo.id))
+            generation = verify.get(SearchIndexGeneration, self.alias)
+            self.assertEqual(generation.state, "published")
+            self.assertIsNotNone(generation.published_at)
+            self.assertEqual(verify.get(Repository, self.repo.id).last_indexed_commit, "old")
+        self.es.reindex.assert_called_once()
+        self.write.assert_called_once()
+        self.es.indices.update_aliases.assert_called_once()
+        self.invalidate.assert_called_once_with(strict=True)
+        self.es.indices.delete.assert_not_called()
+
     def test_ready_stage_is_revalidated_before_retrying_alias_switch(self):
         self.es.indices.update_aliases.side_effect = TimeoutError("before switch")
         with self.assertRaises(TimeoutError):

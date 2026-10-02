@@ -486,6 +486,28 @@ class IndexerRecoveryTests(unittest.TestCase):
         self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
         self.assertIsNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
 
+    def test_lost_full_snapshot_ack_preserves_ids_without_reparsing(self):
+        commit = self.db.commit
+
+        def committed_but_lost():
+            commit()
+            raise RuntimeError("lost snapshot acknowledgement")
+
+        with patch.object(self.db, "commit", side_effect=committed_but_lost):
+            with self.assertRaisesRegex(RuntimeError, "lost snapshot"):
+                self.prepare_full()
+        self.db.close()
+        (self.path / "sample.py").write_text("def later(): pass")
+        with self.sessions() as retry:
+            self.assertIsNotNone(retry.get(RepositoryFullIndexJob, self.repo_id))
+            before = [(symbol.id, symbol.name) for symbol in retry.query(CodeSymbol)]
+            self.assertEqual(before[0][1], "new_function")
+            with patch("app.indexer.symbols.parse_python_source", side_effect=AssertionError("must not reparse")):
+                result = index_repository_symbols(retry, self.repo_id)
+            self.assertTrue(result["resumed"])
+            self.assertEqual(before, [(symbol.id, symbol.name) for symbol in retry.query(CodeSymbol)])
+            self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "old")
+
     def test_empty_full_snapshot_still_deletes_and_invalidates(self):
         (self.path / "sample.py").unlink()
         self.prepare_full()
