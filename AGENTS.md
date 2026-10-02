@@ -1061,3 +1061,18 @@ See `docs/source-audit.md` for limits and verification.
 Live CPU/one-thread evaluation: 25 valid cases, every baseline metric reproduced,
 hybrid Recall@10 .880 / MRR .499. Existing corpus was not rebuilt; no cache,
 settings or API process changes and no performance claim.
+
+## Latest milestone: checked Elasticsearch refresh (2026-10-02)
+
+Explicit refreshes after incremental/full bulk writes and final staging now
+require integer `_shards.failed` zero. Failed or missing/invalid counts raise;
+sync retains committed journals/IDs without checkpoint advancement or cache
+invalidation. Staging remains building with no alias switch; retry uses a fresh
+stage. Existing recovery/consistency limits remain. See sync/atomic-publication
+documentation. No ranking or corpus changes.
+
+245 offline tests pass. Isolated real Elasticsearch one-document refresh check
+passed and its scratch index was removed. Live CPU/one-thread evaluation: all 25
+cases valid, every baseline metric reproduced, hybrid Recall@10 .880 / MRR .499.
+Live corpus/routing/cache, settings and running API processes were unchanged.
+No new performance claim or induced live shard outage.

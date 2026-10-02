@@ -172,3 +172,17 @@ Another full Elasticsearch indexing command with no journal starts a new rebuild
 it cannot reconstruct the lost response as an idempotent retry. Do not manually
 rewind aliases or recreate journals. Tests verify SQLite application transaction
 logic with mocked Elasticsearch/Redis, not PostgreSQL network failure.
+
+### Refresh failures
+
+Both repository bulk refresh and final staging refresh now require an explicit
+integer `_shards.failed` of zero. Failed or unverifiable refresh responses stop
+publication before the alias switch and cache rotation. The job remains building;
+retry uses a fresh staging name under the existing recovery policy. Successful
+bulk counts and staging document counts alone do not bypass this check.
+
+The Elasticsearch [refresh response](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-refresh)
+reports failed shard operations. Offline tests inject failures and verify journal,
+alias and cache behavior. An isolated real one-document index verified the
+successful-response path and was removed afterward; no live shard outage was
+induced.

@@ -100,7 +100,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
             expected_symbols = db.query(CodeSymbol).filter_by(repository_id=repository_id).count()
             if result["symbols_indexed"] != expected_symbols:
                 raise RuntimeError("Staged symbol count did not match PostgreSQL.")
-            client.indices.refresh(index=job.staging_index)
+            engine.refresh_symbol_index(job.staging_index, client=client)
             expected_total = expected_copied + expected_symbols
             if client.count(index=job.staging_index)["count"] != expected_total:
                 raise RuntimeError("Staging index count did not match the prepared snapshot.")

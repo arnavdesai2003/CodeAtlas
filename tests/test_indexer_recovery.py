@@ -29,6 +29,30 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_incremental_refresh_failure_keeps_journal_and_checkpoint(self):
+        self.index.side_effect = lambda **kwargs: search_engine.index_files_in_elasticsearch(**kwargs)
+        with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \
+             patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "embed_texts", return_value=[[0.0] * 384]), \
+             patch.object(search_engine, "bulk", return_value=(1, [])):
+            es.indices.refresh.return_value = {"_shards": {"failed": 1}}
+            with self.assertRaisesRegex(RuntimeError, "refresh was incomplete"):
+                incremental.sync_repository(self.db, self.repo_id)
+            ids = [symbol.id for symbol in self.db.query(CodeSymbol)]
+            self.assertIsNotNone(self.db.get(RepositorySyncJob, self.repo_id))
+            self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+            self.invalidate.assert_not_called()
+            es.indices.refresh.return_value = {"_shards": {"failed": 0}}
+            with self.sessions() as retry, patch.object(incremental, "parse_python_source") as parse:
+                result = incremental.sync_repository(retry, self.repo_id)
+                self.assertTrue(result["resumed"])
+                self.assertEqual(ids, [symbol.id for symbol in retry.query(CodeSymbol)])
+                self.assertIsNone(retry.get(RepositorySyncJob, self.repo_id))
+                self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "new")
+            parse.assert_not_called()
+            self.invalidate.assert_called_once_with(strict=True)
+
     def test_incomplete_incremental_bulk_keeps_checkpoint_and_replays_ids(self):
         self.index.side_effect = lambda **kwargs: search_engine.index_files_in_elasticsearch(**kwargs)
         with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \
@@ -36,6 +60,7 @@ class IndexerRecoveryTests(unittest.TestCase):
              patch.object(search_engine, "elasticsearch_client") as es, \
              patch.object(search_engine, "embed_texts", return_value=[[0.0] * 384]), \
              patch.object(search_engine, "bulk") as bulk:
+            es.indices.refresh.return_value = {"_shards": {"failed": 0}}
             committed_ids = None
             for outcome in ((0, []), (1, [{"index": {"status": 500}}]), (2, [])):
                 bulk.return_value = outcome
@@ -375,6 +400,7 @@ class IndexerRecoveryTests(unittest.TestCase):
 
     def publication_es(self, es):
         es.options.return_value = es
+        es.indices.refresh.return_value = {"_shards": {"failed": 0}}
         es.indices.get_mapping.side_effect = lambda **kw: {kw["index"]: {"mappings": {}}}
         es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {"settings": {"index": {"uuid": "test-uuid"}}}}
         self.active_index = None

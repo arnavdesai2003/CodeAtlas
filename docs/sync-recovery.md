@@ -158,3 +158,12 @@ Offline transaction tests commit successfully before injecting acknowledgement
 loss at each boundary, then inspect and retry through a new SQLite session.
 These verify application recovery logic, not a simulated PostgreSQL network
 failure or distributed atomicity.
+
+### Refresh acknowledgement checks
+
+After a successful incremental bulk write, the explicit Elasticsearch refresh
+must report an integer `_shards.failed` of zero. Shard failures or missing/invalid
+failure counts raise before strict cache invalidation and checkpoint advancement.
+The committed sync journal and symbol IDs remain replayable. A retry repeats the
+recorded publication work and validates refresh again; no reparse is required.
+This closes a previously unchecked refresh response, not cross-store atomicity.

@@ -122,6 +122,7 @@ class AtomicPublicationTests(unittest.TestCase):
         self.stages = set()
         self.es = patch.object(engine, "elasticsearch_client").start()
         self.es.options.return_value = self.es
+        self.es.indices.refresh.return_value = {"_shards": {"failed": 0}}
         self.es.indices.get_mapping.side_effect = lambda **kw: {kw["index"]: {
             "mappings": {"properties": {"embedding": {"type": "dense_vector", "dims": 384,
                 "index_options": {"type": "bbq_hnsw"}}}}}}
@@ -166,6 +167,31 @@ class AtomicPublicationTests(unittest.TestCase):
         self.es.indices.delete.assert_not_called()
         self.es.delete_by_query.assert_not_called()
         self.assertIsNone(self.journal())
+
+    def test_failed_stage_refresh_blocks_publication_and_rebuilds_on_retry(self):
+        self.es.indices.refresh.return_value = {"_shards": {"failed": 1}}
+        with self.assertRaisesRegex(RuntimeError, "refresh was incomplete"):
+            self.publish()
+        self.assertEqual(self.journal()[0], "building")
+        failed_stage = self.journal()[1]
+        self.es.indices.update_aliases.assert_not_called()
+        self.invalidate.assert_not_called()
+        self.es.indices.refresh.return_value = {"_shards": {"failed": 0}}
+        with self.sessions() as retry:
+            result = self.publish(retry)
+        self.assertTrue(result["resumed"])
+        self.assertNotEqual(result["index"], failed_stage)
+        self.assertEqual(self.write.call_count, 2)
+        self.es.indices.update_aliases.assert_called_once()
+        self.invalidate.assert_called_once_with(strict=True)
+
+    def test_refresh_requires_explicit_zero_failed_shards(self):
+        for response in ({}, {"_shards": {}}, {"_shards": {"failed": True}},
+                         {"_shards": {"failed": -1}}, {"_shards": {"failed": "0"}}):
+            with self.subTest(response=response):
+                self.es.indices.refresh.return_value = response
+                with self.assertRaisesRegex(RuntimeError, "refresh was incomplete"):
+                    engine.refresh_symbol_index("stage")
 
     def test_success_records_identity_and_subsequent_retirement(self):
         first = self.publish()["index"]
