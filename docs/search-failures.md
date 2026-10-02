@@ -58,3 +58,21 @@ hybrid Recall@10 .880 / MRR .499. Isolated one-worker HTTP smoke: 80 successful
 queries with payload/attribution checks; temporary server/private keys cleaned,
 legacy routing/index UUID/4,340 documents unchanged. No live corpus/settings/
 process changes or performance improvement claim.
+
+## Invalid query embedding output
+
+Semantic retrieval validates model output before submitting its Elasticsearch
+vector search. It shares indexing's vector checks: a 384-dimensional list of
+finite numeric values, excluding booleans and strings. Invalid shape, nonfinite
+values or numeric overflow raise `InvalidQueryEmbeddingError`, handled by the
+existing sanitized HTTP 503 response. This is a backend output failure, not
+invalid user query text. Valid vectors pass through unchanged.
+
+Failures do not fill Redis, and process-local miss-coalescing state is released
+so a later request can retry. Parallel lexical work may already be running;
+hybrid retrieval still fails rather than returning only that branch. Existing
+valid cache hits need no new embedding. The check does not validate vector
+normalization or all Elasticsearch similarity constraints. Offline tests cover
+malformed output, no vector-search submission/cache fill, clean flight state,
+healthy retry and sanitized API errors. Real-query evaluation retained every
+baseline metric. No invalid live model output was observed.

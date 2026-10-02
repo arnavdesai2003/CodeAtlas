@@ -7,3 +7,7 @@ class IncompleteSearchError(RuntimeError):
 
 class InvalidSearchResponseError(IncompleteSearchError):
     """Retrieval scores cannot be safely formatted or normalized."""
+
+
+class InvalidQueryEmbeddingError(IncompleteSearchError):
+    """Model output cannot safely be submitted as a query vector."""

@@ -28,7 +28,7 @@ from app.indexer.repository import parse_github_url
 from app.indexer.incremental import parse_git_diff
 from app.search import cache, engine, service
 from scripts import benchmark_api
-from app.search.errors import IncompleteSearchError, InvalidSearchResponseError
+from app.search.errors import IncompleteSearchError, InvalidSearchResponseError, InvalidQueryEmbeddingError
 from elastic_transport import ConnectionError as ElasticsearchConnectionError, ApiResponseMeta, NodeConfig
 from elasticsearch import ApiError
 from app.indexer.errors import (
@@ -188,7 +188,8 @@ class ApiTests(unittest.TestCase):
         for error in (ElasticsearchConnectionError("private backend URL"),
                       ApiError("private failure", meta, {"secret": "backend details"}),
                       IncompleteSearchError("private index name"),
-                      InvalidSearchResponseError("private score details")):
+                      InvalidSearchResponseError("private score details"),
+                      InvalidQueryEmbeddingError("private model output")):
             with self.subTest(error=type(error).__name__):
                 self.search.side_effect = error
                 result = self.client.post("/search", json={"query": "q"})
@@ -264,6 +265,28 @@ class ApiTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_invalid_query_vectors_never_search_or_fill_cache_and_can_retry(self):
+        for vector in (None, [0.1] * 383, [float("nan")] * 384,
+                       [float("inf")] * 384, [True] * 384, ["0.1"] * 384,
+                       [10 ** 1000] * 384):
+            with self.subTest(vector_type=type(vector).__name__), \
+                 patch.object(engine, "elasticsearch_client") as es, \
+                 patch.object(engine, "embed_text", return_value=vector) as embed, \
+                 patch.object(service, "get_cached_search", return_value=cache.CacheLookup(generation="g")), \
+                 patch.object(service, "set_cached_search") as write, \
+                 patch.object(service, "search_code", side_effect=lambda **kw: engine.semantic_search(**kw, index_name="fixed")):
+                es.options.return_value.search.return_value = {"hits": {"hits": []}}
+                with self.assertRaises(InvalidQueryEmbeddingError):
+                    service.search_with_cache("q", 10)
+                es.options.return_value.search.assert_not_called()
+                write.assert_not_called()
+                self.assertFalse(service._miss_flights._pending)
+                valid = [0.1] * 384
+                embed.return_value = valid
+                self.assertEqual(service.search_with_cache("q", 10)["results"], [])
+                self.assertIs(es.options.return_value.search.call_args.kwargs["knn"]["query_vector"], valid)
+                write.assert_called_once()
+
     def test_invalid_backend_scores_are_rejected(self):
         for score in (float("nan"), float("inf"), -float("inf"), True, "NaN", "1.0", 10 ** 400):
             with self.subTest(score=score), self.assertRaises(InvalidSearchResponseError):
@@ -363,13 +386,13 @@ class RetrievalTests(unittest.TestCase):
 
     def test_semantic_uses_embedding_and_candidate_count(self):
         with patch.object(engine, "create_symbol_index") as create, \
-             patch.object(engine, "embed_text", return_value=[.1, .2]) as embed, \
+             patch.object(engine, "embed_text", return_value=[.1, .2] * 192) as embed, \
              patch.object(engine, "elasticsearch_client") as es:
             es.options.return_value.search.return_value = {"hits": {"hits": []}}
             engine.semantic_search("q", 40)
         embed.assert_called_once_with("q")
         knn = es.options.return_value.search.call_args.kwargs["knn"]
-        self.assertEqual(knn["query_vector"], [.1, .2])
+        self.assertEqual(knn["query_vector"], [.1, .2] * 192)
         self.assertEqual(knn["num_candidates"], 320)
         create.assert_not_called()
 

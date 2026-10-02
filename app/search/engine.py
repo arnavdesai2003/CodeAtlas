@@ -19,7 +19,7 @@ from app.search.embeddings import (
     embed_texts,
 )
 from app.search.reranker import rerank_results
-from app.search.errors import IncompleteSearchError, InvalidSearchResponseError
+from app.search.errors import IncompleteSearchError, InvalidSearchResponseError, InvalidQueryEmbeddingError
 
 def refresh_symbol_index(index_name: str, *, client=None) -> None:
     response = (client if client is not None else elasticsearch_client).indices.refresh(index=index_name)
@@ -32,17 +32,21 @@ def validate_index_embeddings(embeddings, expected_count: int) -> None:
     if len(embeddings) != expected_count:
         raise RuntimeError("Embedding count does not match symbol count.")
     for vector in embeddings:
-        if not isinstance(vector, list) or len(vector) != EMBEDDING_DIMS:
-            raise RuntimeError("Index embedding has invalid dimensions.")
-        for value in vector:
-            if type(value) not in (int, float):
-                raise RuntimeError("Index embedding contains invalid numeric values.")
-            try:
-                finite = math.isfinite(value)
-            except OverflowError:
-                finite = False
-            if not finite:
-                raise RuntimeError("Index embedding contains invalid numeric values.")
+        validate_embedding_vector(vector)
+
+
+def validate_embedding_vector(vector) -> None:
+    if not isinstance(vector, list) or len(vector) != EMBEDDING_DIMS:
+        raise RuntimeError("Embedding has invalid dimensions.")
+    for value in vector:
+        if type(value) not in (int, float):
+            raise RuntimeError("Embedding contains invalid numeric values.")
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:
+            finite = False
+        if not finite:
+            raise RuntimeError("Embedding contains invalid numeric values.")
 
 
 def reranked_hybrid_search(
@@ -737,6 +741,10 @@ def semantic_search(
     query_vector = embed_text(
         query
     )
+    try:
+        validate_embedding_vector(query_vector)
+    except RuntimeError as exc:
+        raise InvalidQueryEmbeddingError("Query embedding was invalid.") from exc
 
     knn_query = {
         "field": "embedding",

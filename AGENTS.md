@@ -1120,3 +1120,17 @@ validator without indexing. Live CPU/one-thread retrieval evaluation: 25 valid
 cases and all baseline metrics reproduced, hybrid Recall@10 .880 / MRR .499.
 No invalid live model output was observed, no corpus/routing/cache/settings/API
 changes and no performance claim.
+
+## Latest milestone: query embedding validation (2026-10-02)
+
+Semantic search shares indexing's 384-dimensional finite numeric vector checks
+before ES query submission. Invalid output raises typed InvalidQueryEmbeddingError
+through existing sanitized 503 handling. Failures do not fill cache and release
+miss flights for healthy retry; valid vectors are unchanged. Hybrid lexical work
+can already be running, but partial branch fallback remains disabled. No new
+query limits, normalization policy or model/ranking changes. See search-failures.
+
+254 offline tests pass. Live CPU/one-thread evaluation: 25 valid cases, every
+baseline metric reproduced, hybrid Recall@10 .880 / MRR .499. No invalid live
+model output was observed; no corpus/routing/cache/settings/API changes or new
+performance claim.
