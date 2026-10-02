@@ -6,7 +6,6 @@ from tree_sitter import Language, Parser
 
 PYTHON_LANGUAGE = Language(tree_sitter_python.language())
 
-python_parser = Parser(PYTHON_LANGUAGE)
 
 
 @dataclass
@@ -38,7 +37,7 @@ def _symbol_name(node, source: bytes) -> str:
 def parse_python_source(source_code: str) -> list[CodeSymbol]:
     source = source_code.encode("utf-8")
 
-    tree = python_parser.parse(source)
+    tree = Parser(PYTHON_LANGUAGE).parse(source)
 
     symbols: list[CodeSymbol] = []
 

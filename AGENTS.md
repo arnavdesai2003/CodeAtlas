@@ -877,3 +877,17 @@ Live CPU/one-thread evaluation: 25 valid, every baseline reproduced, hybrid
 Recall@10 .880 / MRR .499. Live corpus not rebuilt; no claim about quality after
 re-decoding existing content. No live data/cache/settings/process changes or
 performance claim. Ranking/publication unchanged.
+
+## Latest milestone: per-call Tree-sitter parser isolation (2026-10-02)
+
+parse_python_source constructs its own Parser; no module-global mutable parser
+shared across different repository writers. Language definition/traversal/output
+unchanged, no global lock or thread-local cache. Removes shared parser state;
+no historical corruption reproduced. See docs/source-paths.md.
+
+212 offline tests pass, including synchronized six-instance concurrent extraction
+with source-specific names/code/lines and failed-instance recovery. Live CPU/
+one-thread evaluation: 25 valid, all baseline metrics reproduced, hybrid
+Recall@10 .880 / MRR .499. Live corpus not rebuilt; no data/cache/settings/process
+changes or performance claim. Per-call construction adds allocation; ingestion
+performance not measured. Repository writer lock boundaries remain unchanged.

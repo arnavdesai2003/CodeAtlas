@@ -114,3 +114,20 @@ evaluation validated 25 cases and reproduced all baseline metrics, hybrid
 Recall@10 .880 / MRR .499. The live corpus was not rebuilt, so this does not prove
 quality after re-decoding existing source. No live data/cache/settings/process
 changes or performance claim; publication and ranking remain unchanged.
+
+## Parser instance isolation (2026-10-02)
+
+Each `parse_python_source` call constructs its own Tree-sitter Parser instead
+of sharing a module-global mutable parser. Different repository writers can run
+concurrently under their separate locks; parsing no longer shares that instance.
+The language definition, traversal, symbol names/code/line numbering are unchanged.
+No serialization lock, thread-local cache or infrastructure was added. This
+removes shared parser state; no prior output corruption was reproduced.
+
+212 offline tests pass. A barrier releases six real parser instances concurrently
+and checks distinct instances plus source-specific class/method/code/line results.
+A failed parser instance does not affect the next call. Existing extraction and
+recovery tests still pass. Live CPU/one-thread evaluation reproduced every metric
+on 25 valid cases, hybrid Recall@10 .880 / MRR .499, without rebuilding the live
+index. No live data/cache/settings/process changes. Per-call construction adds
+allocation; no ingestion latency/throughput improvement is claimed or measured.

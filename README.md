@@ -95,6 +95,7 @@ Type changes are covered by real local Git recovery tests, including failed
 publication and restoration from a symlink to a regular source file.
 Python parsing honors encoding declarations and UTF-8 BOMs; invalid encodings
 fail with transaction rollback instead of indexing replacement characters.
+Concurrent symbol extraction uses an independent Tree-sitter parser per call.
 Clone-root, owner and clone directory components also reject symlinks/non-directories
 before ingestion, new Git sync or source reads; rejected paths require inspection.
 Git commands disable terminal input and use a configurable 120-second per-command
