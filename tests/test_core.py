@@ -7,7 +7,7 @@ from pathlib import Path
 from contextlib import redirect_stdout
 import io
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 # Set test configuration before importing modules; never connect to these URLs.
 os.environ.update(
@@ -107,7 +107,9 @@ class CacheTests(unittest.TestCase):
 
 class ApiTests(unittest.TestCase):
     def test_invalid_clone_url_rejected_before_ingestion_services(self):
-        for url in ("https://example.com/o/r", "https://[broken/o/r", "file:///tmp/repo"):
+        for url in ("https://example.com/o/r", "https://[broken/o/r", "file:///tmp/repo",
+                    "https://token@github.com/o/r", "https://github.com:443/o/r",
+                    "https://github.com/o/r?token=secret", "https://github.com/o/%2e%2e"):
             with self.subTest(url=url):
                 response = self.client.post("/repositories", json={"clone_url": url})
                 self.assertEqual(response.status_code, 400)
@@ -311,6 +313,33 @@ class RetrievalTests(unittest.TestCase):
 
 
 class ParserTests(unittest.TestCase):
+    def test_plain_github_url_variants_preserve_components(self):
+        for url in ("https://github.com/Owner-1/repo_name.v2.git",
+                    "http://www.github.com/Owner-1/repo_name.v2/",
+                    "https://GITHUB.COM/Owner-1/repo_name.v2.git/"):
+            with self.subTest(url=url):
+                self.assertEqual(parse_github_url(url), ("Owner-1", "repo_name.v2"))
+
+    def test_ambiguous_url_forms_rejected_before_ingestion_side_effects(self):
+        from app.indexer import repository
+        urls = ["https://token@github.com/o/r", "https://user:password@github.com/o/r",
+                "https://github.com:443/o/r", "https://github.com:bad/o/r",
+                "https://github.com/o/r?token=secret", "https://github.com/o/r#main",
+                "https://github.com//o/r", "https://github.com/o//r", "https://github.com/o/r//",
+                "https://github.com/o/%2e%2e", "https://github.com/o/r%2fname",
+                "https://github.com/o/r\\name", "https://github.com/o/r\n",
+                " https://github.com/o/r", "https://github.com/o/r\x00",
+                "https://github.com/o/r name", "https://github.com/o/répo",
+                "https://github.com/o/..git"]
+        db = Mock()
+        with patch.object(repository.subprocess, "run") as git, patch.object(repository.Path, "mkdir") as mkdir:
+            for url in urls:
+                with self.subTest(url=url), self.assertRaises(InvalidRepositoryURL):
+                    repository.ingest_repository(db, url)
+            db.query.assert_not_called()
+            git.assert_not_called()
+            mkdir.assert_not_called()
+
     def test_python_symbols(self):
         symbols = parse_python_source("class A:\n    def run(self):\n        return 1\n")
         self.assertEqual([(s.qualified_name, s.kind) for s in symbols], [("A", "class"), ("A.run", "method")])

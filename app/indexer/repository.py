@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -42,6 +43,10 @@ LANGUAGE_BY_EXTENSION = {
 
 
 def parse_github_url(clone_url: str) -> tuple[str, str]:
+    # urlparse silently strips some controls; reject before parsing so the
+    # accepted URL is the same text passed to Git and stored in metadata.
+    if not isinstance(clone_url, str) or any(ord(char) <= 32 or ord(char) == 127 for char in clone_url):
+        raise InvalidRepositoryURL("Invalid GitHub repository URL.")
     try:
         parsed = urlparse(clone_url)
         hostname = parsed.hostname
@@ -54,20 +59,18 @@ def parse_github_url(clone_url: str) -> tuple[str, str]:
     if hostname not in {"github.com", "www.github.com"}:
         raise InvalidRepositoryURL("Only github.com repositories are currently supported.")
 
-    parts = [
-        part
-        for part in parsed.path.strip("/").split("/")
-        if part
-    ]
+    if parsed.netloc.lower() not in {"github.com", "www.github.com"} or "?" in clone_url or "#" in clone_url:
+        raise InvalidRepositoryURL("Credentials, ports, query strings and fragments are not supported.")
 
-    if len(parts) != 2:
+    match = re.fullmatch(r"/([A-Za-z0-9_-]+)/([A-Za-z0-9_.-]+)/?", parsed.path)
+
+    if match is None:
         raise InvalidRepositoryURL(
             "GitHub URL must have the format "
             "https://github.com/owner/repository"
         )
 
-    owner = parts[0]
-    repository_name = parts[1]
+    owner, repository_name = match.groups()
 
     if repository_name.endswith(".git"):
         repository_name = repository_name[:-4]

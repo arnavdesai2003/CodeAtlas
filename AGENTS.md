@@ -593,3 +593,22 @@ ambiguous-commit clone retention and journal replay are unchanged. No live
 ingestion/sync, data/schema/index/cache, .env/defaults or process changes; no
 performance claim and retrieval evaluation remains inherited. Public API
 authorization and request/resource boundaries remain separate priorities.
+
+## Latest milestone: unambiguous repository URL inputs (2026-10-01)
+
+Repository parsing now accepts plain HTTP/HTTPS GitHub/www.github.com URLs with
+two ASCII path components and optional single trailing slash/.git suffix.
+Credentials, explicit ports, query/fragment suffixes, percent escapes,
+backslashes, repeated separators, whitespace/controls and non-ASCII components
+are rejected before DB lookup/mkdir/Git work. Accepted text/case remains stored
+unchanged; no canonicalization, migration or duplicate merging. See the precise
+CodeAtlas input profile in `docs/repository-errors.md`.
+
+158 offline tests pass. Read-only compatibility check: all six registered URLs
+accepted, no rejected IDs; no URLs/credentials printed. No live ingestion/sync,
+row/clone, corpus/index/cache, settings or process changes. Pending sync work
+still resumes before URL parsing; old unsupported stored URLs need inspection
+before new sync. Retrieval/performance measurements remain inherited. This
+does not constrain redirects, Git credential/config behavior or source-file
+symlinks. Filesystem/execution boundaries remain the next concrete inspection
+priority; public authorization remains separate.

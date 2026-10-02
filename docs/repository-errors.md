@@ -31,9 +31,35 @@ of 500. No automatic destructive cleanup, HTTP retries or job deletion was added
 See [sync recovery](sync-recovery.md) and
 [full-index recovery](full-index-recovery.md) before reconciling failed work.
 
-156 offline tests pass. New API checks cover typed statuses, sanitized messages,
+158 offline tests pass. New API checks cover typed statuses, sanitized messages,
 internal failures retaining 500, and actual malformed-URL rejection. Existing
 transaction/failure tests continue verifying clone preservation, reservation races,
 pending-job recovery and locks. No live ingestion/sync was invoked, and no data,
 schema, corpus/index/cache, settings or running API processes changed. Retrieval
 code and performance are unchanged; quality measurements remain inherited.
+
+## Accepted repository URL profile
+
+Inputs must be HTTP/HTTPS URLs with the exact authority `github.com` or
+`www.github.com` (case-insensitive), and a path `/owner/repository` with an
+optional single trailing slash. Owners use ASCII letters, digits, underscores
+or hyphens; repository components also permit periods. A terminal `.git` is
+removed for local directory naming. Dot/dot-dot repository components after
+that removal are rejected. This is CodeAtlas's input profile, not a complete
+implementation of GitHub's naming rules.
+
+Credentials, explicit ports (including 443), query strings/fragments, percent
+escapes, backslashes, repeated separators, whitespace/control characters and
+non-ASCII components are rejected with 400 on creation. Controls are checked
+before URL parsing can silently remove them. Accepted text is preserved for
+Git and database storage; URLs are not automatically canonicalized or merged.
+Equivalent accepted spellings can still conflict on their shared clone directory.
+
+Offline tests verify rejection before any database lookup, mkdir or Git call.
+A read-only live check validated all six registered repository URLs; no rows
+or clones were modified. Older stored URLs outside this profile need operator
+inspection before a new sync can parse them; existing pending sync publication
+still resumes before URL parsing. Do not rewrite stored URLs or remove clones
+automatically. This validation does not constrain Git redirects, credential
+helpers, local Git configuration or source-file symlinks; those are separate
+execution/filesystem boundaries.
