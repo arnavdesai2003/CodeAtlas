@@ -70,3 +70,23 @@ successful requests, including six Redis hits, verified payload equality and
 engine attribution. Server stopped/private namespace removed; legacy routing,
 index UUID and 4,340 documents unchanged. No live generation/settings/process
 changes. Retrieval evaluation remains inherited; no latency/throughput claim.
+
+## Excessively nested entries
+
+Cache result validation now limits list/dictionary nesting to 16 container levels,
+counting the outer results list. Normal search rows contain scalar fields and
+remain unchanged. Validation uses an explicit stack; excessive or cyclic nested
+write values are rejected before contacting Redis. JSON decoder recursion errors
+also become cache misses rather than escaping into the request.
+
+An invalid read preserves its observed generation token, allowing retrieval to
+conditionally replace the entry under the existing fence. This introduces no
+key migration, generation rotation or Redis flush. The check is not a full row
+schema validator or a cache payload byte-size limit. Existing valid cache hits,
+empty results and bypass behavior stay unchanged.
+
+Offline tests reproduce excessive nesting, verify decoder-error fallback,
+reject cyclic/deep writes and exercise healthy miss/refill behavior with clean
+coalescing state. Isolated real Redis verified nested corruption, retained
+generation, healthy refill and TTL; both private keys were removed. Retrieval
+and ranking were unchanged; no new evaluation or throughput claim was made.

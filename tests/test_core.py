@@ -75,6 +75,53 @@ class ServiceTests(unittest.TestCase):
 
 
 class CacheTests(unittest.TestCase):
+    def test_deep_and_cyclic_writes_are_rejected_without_redis(self):
+        nested = {}
+        for _ in range(cache.MAX_CACHE_NESTING + 1):
+            nested = {"nested": nested}
+        cyclic = {}
+        cyclic["self"] = cyclic
+        with patch.object(cache, "redis_client") as redis:
+            for value in (nested, cyclic):
+                self.assertFalse(cache.set_cached_search("q", 10, [value], generation="g"))
+            redis.eval.assert_not_called()
+
+    def test_decoder_recursion_error_falls_back_without_losing_generation(self):
+        with patch.object(cache, "redis_client") as redis, \
+             patch.object(cache.json, "loads", side_effect=RecursionError("nested input")):
+            redis.eval.return_value = ["g", "[]"]
+            lookup = cache.get_cached_search("q", 10)
+        self.assertIsNone(lookup.results)
+        self.assertEqual(lookup.generation, "g")
+
+    def test_excessively_nested_json_becomes_generation_bound_miss(self):
+        import sys
+        depth = sys.getrecursionlimit() + 100
+        value = '[{"nested":' + '[' * depth + '0' + ']' * depth + '}]'
+        with patch.object(cache, "redis_client") as redis:
+            redis.eval.return_value = ["g", value]
+            lookup = cache.get_cached_search("q", 10)
+        self.assertIsNone(lookup.results)
+        self.assertEqual(lookup.generation, "g")
+
+    def test_nested_corruption_falls_back_and_allows_healthy_cache_fill(self):
+        import sys
+        depth = sys.getrecursionlimit() + 100
+        value = '[{"nested":' + '[' * depth + '0' + ']' * depth + '}]'
+        with patch.object(cache, "redis_client") as redis, \
+             patch.object(service, "search_code", return_value=[]) as search, \
+             patch.object(service, "set_cached_search") as write:
+            redis.eval.return_value = ["g", value]
+            response = service.search_with_cache("q", 10)
+            self.assertFalse(response["cache_hit"])
+            self.assertEqual(response["results"], [])
+            search.assert_called_once_with(query="q", limit=10)
+            write.assert_called_once_with(query="q", limit=10, results=[], generation="g")
+            self.assertFalse(service._miss_flights._pending)
+            redis.eval.return_value = ["g", "[]"]
+            self.assertTrue(service.search_with_cache("q", 10)["cache_hit"])
+            search.assert_called_once()
+
     def test_nonfinite_and_over_limit_entries_become_generation_bound_misses(self):
         for value in ('[{"score":NaN}]', '[{"score":Infinity}]', '[{"score":-Infinity}]',
                       '[{"nested":{"value":1e400}}]', '[{},{}]'):

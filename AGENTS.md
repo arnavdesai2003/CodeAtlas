@@ -1178,3 +1178,17 @@ ambiguous-commit preservation and filesystem-race limits remain. See source-path
 evaluation: 25 valid cases, all baseline metrics reproduced, hybrid Recall@10
 .880 / MRR .499. No live ingestion/rebuild/cache/settings/API changes or new
 performance claim; iteration order is not guaranteed.
+
+## Latest milestone: cache nesting guard (2026-10-02)
+
+Cached JSON list/dictionary nesting is bounded to 16 container levels including
+the outer results list. Iterative validation rejects excessive/cyclic writes;
+decoder RecursionError becomes a generation-bound miss. Healthy retrieval can
+conditionally replace invalid entries with the same generation fence. No full
+row schema/byte-size bound, key migration, rotation or flush added. Normal flat
+rows, empty hits and benchmark bypass are unchanged. See cache-consistency.
+
+268 offline tests pass. Isolated real Redis checked corrupt nested read fallback,
+retained generation, healthy refill and TTL; both private keys removed. No live
+search-cache/corpus/settings/API changes. Retrieval/ranking unchanged; previous
+quality evaluation remains applicable, with no new evaluation/performance claim.

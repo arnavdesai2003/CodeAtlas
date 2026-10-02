@@ -11,6 +11,7 @@ from app.core.config import settings
 CACHE_PREFIX = "codeatlas:search:"
 ENTRY_PREFIX = f"{CACHE_PREFIX}v2:"
 GENERATION_KEY = f"{CACHE_PREFIX}generation:v2"
+MAX_CACHE_NESTING = 16
 
 # A single Redis operation binds the read to its generation. A random token
 # avoids reusing an old generation after metadata eviction or Redis reset.
@@ -61,7 +62,18 @@ def _reject_constant(value: str):
 
 
 def _valid_shape(results, limit):
-    return isinstance(results, list) and len(results) <= limit and all(isinstance(item, dict) for item in results)
+    if not isinstance(results, list) or len(results) > limit or not all(isinstance(item, dict) for item in results):
+        return False
+    pending = [(results, 1)]
+    while pending:
+        value, depth = pending.pop()
+        if not isinstance(value, (list, dict)):
+            continue
+        if depth > MAX_CACHE_NESTING:
+            return False
+        children = value.values() if isinstance(value, dict) else value
+        pending.extend((child, depth + 1) for child in children if isinstance(child, (list, dict)))
+    return True
 
 
 def get_cached_search(query: str, limit: int) -> CacheLookup:
@@ -80,7 +92,7 @@ def get_cached_search(query: str, limit: int) -> CacheLookup:
         results = json.loads(value, parse_float=_finite_float, parse_constant=_reject_constant)
         if not _valid_shape(results, limit):
             raise ValueError("Invalid cached result shape")
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return CacheLookup(generation=generation)
     return CacheLookup(results=results, generation=generation)
 
