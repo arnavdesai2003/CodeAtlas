@@ -74,3 +74,22 @@ cooperative ASGI behavior; blocked event loops/proxy buffers remain separate.
 181 offline tests pass, including partial-body cancellation/no dispatch, route
 execution outside the timer and external cancellation. No live data/settings/
 process changes or new performance measurements; prior live checks are inherited.
+
+## Real-socket receipt verification
+
+Run `.venv/bin/python -B -m scripts.verify_http_receipt`. This starts a minimal
+diagnostic FastAPI fixture with the production middleware on an ephemeral
+loopback port, 16-byte size limit and 0.2-second receipt deadline. It uses no
+database, Redis, Elasticsearch, models or production routes. Never deploy the
+probe factory. Its child server stops on success/failure; nonzero exit invalidates
+verification and the final completed record confirms shutdown.
+
+Six real Uvicorn/socket cases passed: partial Content-Length and unterminated
+chunked bodies returned 408; oversized fixed/chunked bodies returned 413; exact
+16-byte fixed/chunked bodies returned 200 with unchanged byte counts. A handler
+counter stayed zero after all rejections and advanced only for the two accepted
+requests. A fresh stats request succeeded after each case. The two stalled cases
+took 202.680/202.207 ms including a subsequent stats request; these are diagnostic
+observations, not hard scheduling guarantees or production latency measurements.
+The checks do not establish same-connection reuse or proxy behavior. 181 offline
+tests still pass. No live stores, settings or API processes were touched.

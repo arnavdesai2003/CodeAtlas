@@ -718,3 +718,18 @@ timer and external cancellation, alongside size/signature coverage. No live
 data/cache/corpus/schema/settings/process changes; quality/HTTP checks inherited,
 no performance claim. Aggregate concurrency, public authorization and proxy/
 server connection policies remain separate priorities.
+
+## Latest milestone: real-socket body receipt verification (2026-10-01)
+
+scripts.verify_http_receipt starts an isolated FastAPI fixture using production
+body middleware on an ephemeral loopback port (16 bytes/.2 seconds). No stores,
+models or production routes. Six cases passed: partial fixed/chunked uploads 408,
+oversized fixed/chunked 413, exact-limit fixed/chunked 200 with unchanged bytes.
+Handler counter proves rejections did not dispatch; fresh requests work after
+each case. Server stopped automatically. See docs/request-limits.md for commands
+and measured observations; never deploy the probe factory.
+
+181 offline tests pass. Diagnostic code/docs only; no live data/cache/settings/
+API processes changed, no new retrieval or performance claim. This verifies
+fresh connections, not same-connection reuse/proxies or hard scheduling bounds.
+Public authorization and aggregate concurrency remain separate priorities.

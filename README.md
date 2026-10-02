@@ -99,6 +99,8 @@ HTTP bodies have a configurable 1 MiB limit; oversized requests return 413 befor
 route work. See [request limits](docs/request-limits.md), especially for large webhooks.
 Body receipt also has a configurable 30-second total deadline; stalled uploads
 return 408 without starting route work. Search/sync execution remains separate.
+Run `.venv/bin/python -B -m scripts.verify_http_receipt` for isolated real-socket
+checks of stalled, oversized and exact-limit fixed/chunked bodies.
 
 ## Search
 
