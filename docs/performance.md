@@ -440,3 +440,71 @@ reproducibility on other hardware or future rebuilds. They do not justify
 changing ranking weights, candidate sizes or evaluation cases. Every real
 corpus rebuild still requires evaluation; no exact standalone semantic metric
 preservation is claimed for the new publication workflow.
+
+## Resolution request-sequencing investigation (2026-10-01)
+
+New read-only diagnostics narrow the previously recorded alias-resolution
+regression to request sequencing after Elasticsearch retrieval. They do not
+identify the underlying server/transport cause or demonstrate an optimization.
+Production code, ranking, queries, candidate sizes and per-request concrete
+index pinning remain unchanged.
+
+The checked-in `scripts.profile_resolution` ran on macOS 26.6 arm64, Python
+3.13.15, CPU MiniLM with `TORCH_NUM_THREADS=1`, existing Docker Elasticsearch
+9.4.3 and cached offline model weights. Ten hybrid calls warmed the model and
+connections. Each block then excluded five warm-ups and measured 50 successful
+follow-up requests using the unchanged ten queries. BM25 predecessors retrieved
+40 candidates (the normal hybrid candidate limit for limit 10); hybrid
+predecessors used limit 10. Only the follow-up request is timed, not its
+predecessor. All 500 measured follow-ups succeeded. Exceptions terminate the
+script with a nonzero exit instead of reporting an incomplete block as success.
+
+| Preceding operation | Timed request | Average ms | p95 ms |
+|---|---|---:|---:|
+| None | Alias resolution | .434 | .533 |
+| Sleep 20 ms | Alias resolution | 2.176 | 2.695 |
+| Embedding | Alias resolution | 1.030 | 1.477 |
+| BM25 | Alias resolution | 16.161 | 23.102 |
+| Hybrid | Alias resolution | 15.401 | 20.788 |
+| None, bracketing control | Alias resolution | .521 | .666 |
+| BM25 | Alias resolution, separate client/pool | 13.511 | 14.860 |
+| BM25 | Cluster info | 19.417 | 23.285 |
+| BM25 | Document count | 14.226 | 20.962 |
+| BM25 | Alias resolution, closing control | 18.891 | 23.534 |
+
+Embedding alone did not reproduce the roughly 15 ms penalty. BM25 alone did,
+without invoking embedding. Info and count requests also became slow after
+BM25, so this is not isolated to alias metadata or the missing-alias 404.
+A separate connection pool did not restore tight-loop metadata latency.
+Routing, index UUID and document count were unchanged at the start/end:
+legacy `codeatlas_symbols`, 4,340 documents. These checks are not proof of
+unchanged document contents during a run; comparisons require no concurrent
+indexing/publication. No store was written, Redis was not used, and no API
+server was started or restarted.
+
+Additional temporary controls, run sequentially on the same machine:
+
+- Alternating shared/separate resolver pools (50 measured hybrid calls per
+  block after ten warm-ups) yielded resolution averages 13.984/14.289/16.755/
+  14.396 ms. Separate pools did not remove the delay.
+- `TOKENIZERS_PARALLELISM=false` yielded resolution averages 15.575/14.166/
+  15.944/15.188 ms across the same shared/separate block order.
+- Alternating Python thread switch intervals .005/.001/.005/.001 seconds
+  yielded resolution averages 15.496/14.831/15.591/16.175 ms. This did not
+  demonstrate a scheduling-setting fix.
+- Alternating configured localhost/explicit IPv4 clients for all retrieval
+  requests yielded hybrid averages 42.797/43.223/36.580/40.532 ms (50 measured
+  calls per block after ten warm-ups). IPv4 did not demonstrate an improvement.
+- An instrumented 50-call hybrid profile attributed most client request wait
+  to socket response reads; resolution averaged about 14.8 ms. Instrumentation
+  and overlapping threads limit attribution. It cannot distinguish server
+  dispatch, network delivery or host scheduling.
+
+These are sequential component diagnostics, not HTTP latency, throughput,
+sustained capacity or retrieval-quality evaluations. Short blocks and order
+variation limit comparisons. No production setting was changed based on them.
+All 122 existing offline tests passed. Retrieval/ranking/indexing were unchanged,
+so no new retrieval evaluation or HTTP improvement is claimed. The next targeted
+investigation is server/transport tracing of requests immediately after search,
+including response-size and connection behavior, while preserving generation
+consistency. Cache-miss coalescing remains separate.

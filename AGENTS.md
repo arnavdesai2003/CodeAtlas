@@ -387,3 +387,22 @@ hybrid Recall@10 .880 / MRR .499. No new performance claim; the earlier
 alias-resolution regression remains unresolved. Next priority: investigate that
 resolution dependency while preserving per-request generation consistency.
 Cache-miss coalescing remains separate; retained indices alone are not rollback.
+
+## Latest investigation: resolution request sequencing (2026-10-01)
+
+Added read-only `scripts.profile_resolution` with warm-up exclusion, failure exit,
+separate-pool and predecessor/endpoint controls, and start/end routing/UUID/count
+checks. CPU/one-thread run: alias avg .434 ms in a tight loop, 1.030 ms after
+embedding, 16.161 ms after BM25 and 15.401 ms after hybrid. Info/count requests
+also slowed after BM25; separate resolver pools did not remove the delay.
+Tokenizer parallelism, Python switch interval and explicit IPv4 controls did not
+demonstrate a fix. Instrumented wait was concentrated in socket response reads;
+underlying server/transport/host cause remains unresolved. Details and limits:
+`docs/performance.md`. These are component diagnostics, not HTTP measurements.
+
+122 offline tests pass. Live routing/UUID/count unchanged, legacy physical index
+with 4,340 documents. No production code, settings, ranking, corpus/index, cache,
+metadata or API processes changed; no new retrieval-quality or performance gain
+claim. Next targeted investigation: server/transport tracing after search,
+including response size and connection behavior, while preserving per-request
+concrete generation consistency. Cache-miss coalescing remains separate.

@@ -198,6 +198,18 @@ exclude client queue wait and JSON validation. Report server timings separately.
 retrieval branches concurrently. `profile_concurrent` instruments overlapping
 stages and adds overhead: its stage averages must not be summed.
 
+To investigate the resolution delay with read-only request-sequencing controls:
+
+```sh
+EMBEDDING_DEVICE=cpu TORCH_NUM_THREADS=1 HF_HUB_OFFLINE=1 \
+  .venv/bin/python -B -m scripts.profile_resolution
+```
+
+Use an already cached model and avoid concurrent indexing/publication. This
+diagnostic times lookups after embedding or retrieval, and compares other
+Elasticsearch endpoints and a separate connection pool. It bypasses Redis by
+calling the engine directly; these measurements are not HTTP or capacity results.
+
 Keep **warm-cache HTTP**, **uncached HTTP**, **direct engine**, and **component
 profiling** results separate. Short runs indicate a throughput knee, not a
 proven sustained capacity ceiling. See [measured results](docs/performance.md)
