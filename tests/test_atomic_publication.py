@@ -129,7 +129,10 @@ class AtomicPublicationTests(unittest.TestCase):
         self.es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {
             "settings": {"index": {"number_of_shards": "1", "number_of_replicas": "0",
                 "analysis": {"analyzer": {"custom": {"type": "standard"}}}, "uuid": "omit"}}}}
-        self.es.indices.create.side_effect = lambda **kw: self.stages.add(kw["index"])
+        def create_stage(**kwargs):
+            self.stages.add(kwargs["index"])
+            return {"acknowledged": True, "shards_acknowledged": True}
+        self.es.indices.create.side_effect = create_stage
         self.create = patch.object(engine, "create_symbol_index", side_effect=lambda **kw:
                                   self.stages.add(kw["index_name"])).start()
         self.write = patch.object(engine, "_write_repository_index", return_value={"symbols_indexed": 1}).start()
@@ -167,6 +170,44 @@ class AtomicPublicationTests(unittest.TestCase):
         self.es.indices.delete.assert_not_called()
         self.es.delete_by_query.assert_not_called()
         self.assertIsNone(self.journal())
+
+    def test_unacknowledged_stage_creation_stops_before_copy_and_retry_uses_fresh_name(self):
+        def ambiguous_create(**kwargs):
+            self.stages.add(kwargs["index"])
+            return {"acknowledged": False, "shards_acknowledged": False}
+        self.es.indices.create.side_effect = ambiguous_create
+        with self.assertRaisesRegex(RuntimeError, "creation was not acknowledged"):
+            self.publish()
+        phase, failed_stage, _ = self.journal()
+        self.assertEqual(phase, "building")
+        self.assertIn(failed_stage, self.stages)
+        self.es.reindex.assert_not_called()
+        self.write.assert_not_called()
+        self.es.indices.update_aliases.assert_not_called()
+        self.invalidate.assert_not_called()
+        self.es.indices.create.side_effect = lambda **kwargs: {
+            "acknowledged": True, "shards_acknowledged": True,
+        }
+        with self.sessions() as retry:
+            result = self.publish(retry)
+            failed = retry.get(SearchIndexGeneration, failed_stage)
+            self.assertEqual(failed.state, "abandoned")
+            self.assertIsNone(failed.index_uuid)
+        self.assertTrue(result["resumed"])
+        self.assertNotEqual(result["index"], failed_stage)
+        self.assertIn(failed_stage, self.stages)
+        self.es.indices.delete.assert_not_called()
+        self.es.reindex.assert_called_once()
+
+    def test_staging_creation_requires_both_boolean_acknowledgements(self):
+        self.es.indices.create.side_effect = None
+        for response in ({}, {"acknowledged": True},
+                         {"acknowledged": True, "shards_acknowledged": False},
+                         {"acknowledged": 1, "shards_acknowledged": True}):
+            with self.subTest(response=response):
+                self.es.indices.create.return_value = response
+                with self.assertRaisesRegex(RuntimeError, "creation was not acknowledged"):
+                    publication.create_staging_index(self.es, source="source", stage="stage")
 
     def test_failed_stage_refresh_blocks_publication_and_rebuilds_on_retry(self):
         self.es.indices.refresh.return_value = {"_shards": {"failed": 1}}

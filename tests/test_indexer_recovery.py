@@ -401,6 +401,7 @@ class IndexerRecoveryTests(unittest.TestCase):
     def publication_es(self, es):
         es.options.return_value = es
         es.indices.refresh.return_value = {"_shards": {"failed": 0}}
+        es.indices.create.return_value = {"acknowledged": True, "shards_acknowledged": True}
         es.indices.get_mapping.side_effect = lambda **kw: {kw["index"]: {"mappings": {}}}
         es.indices.get_settings.side_effect = lambda **kw: {kw["index"]: {"settings": {"index": {"uuid": "test-uuid"}}}}
         self.active_index = None

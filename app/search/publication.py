@@ -31,7 +31,9 @@ def create_staging_index(client, *, source: str, stage: str) -> None:
         "number_of_shards", "number_of_replicas", "refresh_interval",
         "analysis", "similarity", "mapping",
     ) if key in source_settings}
-    client.indices.create(index=stage, mappings=mappings, settings=settings)
+    response = client.indices.create(index=stage, mappings=mappings, settings=settings)
+    if response.get("acknowledged") is not True or response.get("shards_acknowledged") is not True:
+        raise RuntimeError("Staging index creation was not acknowledged; retry full indexing.")
 
 
 def publish_repository_index(db, repository_id: int) -> dict:

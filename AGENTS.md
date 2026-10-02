@@ -1076,3 +1076,18 @@ passed and its scratch index was removed. Live CPU/one-thread evaluation: all 25
 cases valid, every baseline metric reproduced, hybrid Recall@10 .880 / MRR .499.
 Live corpus/routing/cache, settings and running API processes were unchanged.
 No new performance claim or induced live shard outage.
+
+## Latest milestone: staging creation acknowledgement guard (2026-10-02)
+
+Staging creation now requires both boolean acknowledgements before copy/index
+work. Ambiguous, missing or malformed responses preserve the building journal;
+retry abandons the tracked attempt and uses a fresh name without deleting the
+potentially created index. An attempt without recorded UUID remains protected
+under retention policy. Legacy provisioning is unchanged. See atomic-publication
+documentation. No automatic cleanup or reconciliation added.
+
+247 offline tests pass. Isolated real Elasticsearch staging creation and copied
+mapping passed; both scratch indices removed. Live CPU/one-thread evaluation
+reproduced all baseline metrics with 25 valid cases, hybrid Recall@10 .880 /
+MRR .499. No live corpus/routing/cache, settings or API changes; no performance
+claim or induced live creation timeout.

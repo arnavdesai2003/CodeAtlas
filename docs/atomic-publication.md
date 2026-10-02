@@ -186,3 +186,22 @@ reports failed shard operations. Offline tests inject failures and verify journa
 alias and cache behavior. An isolated real one-document index verified the
 successful-response path and was removed afterward; no live shard outage was
 induced.
+
+### Staging creation acknowledgements
+
+Staging creation requires both `acknowledged` and `shards_acknowledged` to be
+explicitly true before copying or indexing documents. False, missing or malformed
+acknowledgements stop the build with its journal intact. The Elasticsearch
+[create index API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-indices-create)
+notes that creation may still succeed after an unacknowledged response. The
+application therefore retains the potentially created stage and retries with a
+fresh random name instead of reusing or deleting it.
+
+The abandoned attempt has no recorded UUID if acknowledgement failed before
+identity recording. Existing retention rules protect such unverified attempts;
+this guard does not add automatic reconciliation or cleanup. Legacy index
+provisioning is unchanged. Offline tests simulate creation taking effect before
+returning an unacknowledged response and verify no copy, bulk work, alias switch
+or cache rotation occurs before retry. An isolated real staging-creation check
+verified the successful response and copied mapping; both scratch indices were
+removed afterward.
