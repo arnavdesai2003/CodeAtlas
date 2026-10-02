@@ -93,6 +93,8 @@ when affected regular files become links. See [source selection](docs/source-pat
 for recovery behavior and filesystem limits.
 Clone-root, owner and clone directory components also reject symlinks/non-directories
 before ingestion, new Git sync or source reads; rejected paths require inspection.
+Git commands disable terminal input and use a configurable 120-second per-command
+timeout. See [Git execution](docs/git-execution.md) for settings and recovery limits.
 
 ## Search
 

@@ -651,3 +651,21 @@ rebuilt. No live ingestion/sync, data/cache/schema/settings/process changes or
 performance claims. Ancestors above configured root are trusted; validation is
 not race-free against hostile local replacements. Git execution configuration
 and public authorization remain separate inspection priorities.
+
+## Latest milestone: Git command timeout and terminal-input policy (2026-10-01)
+
+Clone/commit/branch/fetch/reset/diff share git_output: argv execution, stdin
+DEVNULL, GIT_TERMINAL_PROMPT=0, per-command GIT_TIMEOUT_SECONDS (default 120,
+positive integer). Other environment/config is preserved. Clone timeouts use
+existing pre-commit cleanup and sanitized 502; sync timeouts propagate through
+rollback/lock release with stable 500 and no checkpoint advancement. Ambiguous
+commit retention and pending-publication-first replay are unchanged. A prior
+reset may change worktree; retry uses existing checkpoint workflow. See
+`docs/git-execution.md`.
+
+168 offline tests pass, covering runner args/env/policy and ingestion/sync timeout
+recovery plus existing failures. No live Git/clone/sync, data/index/cache/schema,
+.env or API process changes. New setting documented in .env.example; quality
+and performance measurements remain inherited. Timeout is per direct subprocess,
+not whole-request/process-tree supervision; helpers holding pipes, askpass/config,
+redirects and public authorization remain separate limits.

@@ -15,6 +15,7 @@ from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.errors import RepositoryNotFound, RepositoryCloneMissing
 from app.indexer.paths import regular_source_path, clone_directory
+from app.indexer.git import git_output
 from app.indexer.repository import (
     LANGUAGE_BY_EXTENSION,
     REPOSITORY_ROOT,
@@ -32,19 +33,7 @@ def run_git(
     repository_path: Path,
     *args: str,
 ) -> str:
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository_path),
-            *args,
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    return result.stdout.strip()
+    return git_output("-C", str(repository_path), *args)
 
 
 def parse_git_diff(output: str) -> list[dict]:

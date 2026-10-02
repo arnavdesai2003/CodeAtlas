@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import CodeFile, Repository
 from app.indexer.errors import InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed
 from app.indexer.paths import regular_source_path, clone_directory
+from app.indexer.git import git_output
 
 
 REPOSITORY_ROOT = Path("data/repos")
@@ -121,37 +122,11 @@ def discover_source_files(repository_path: Path) -> list[dict]:
 
 
 def get_current_commit(repository_path: Path) -> str:
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository_path),
-            "rev-parse",
-            "HEAD",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    return result.stdout.strip()
+    return git_output("-C", str(repository_path), "rev-parse", "HEAD")
 
 
 def get_current_branch(repository_path: Path) -> str:
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repository_path),
-            "branch",
-            "--show-current",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-    branch = result.stdout.strip()
+    branch = git_output("-C", str(repository_path), "branch", "--show-current")
 
     return branch or "unknown"
 
@@ -192,19 +167,7 @@ def ingest_repository(
     commit_started = False
 
     try:
-        subprocess.run(
-            [
-                "git",
-                "clone",
-                "--depth",
-                "1",
-                clone_url,
-                str(repository_path),
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-        )
+        git_output("clone", "--depth", "1", clone_url, str(repository_path))
 
         commit_sha = get_current_commit(repository_path)
         branch = get_current_branch(repository_path)
@@ -248,16 +211,14 @@ def ingest_repository(
         db.commit()
         return result
 
-    except subprocess.CalledProcessError as exc:
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
         db.rollback()
 
         if not commit_started and repository_path.exists():
             shutil.rmtree(repository_path)
 
-        error_message = (
-            exc.stderr.strip()
-            if exc.stderr
-            else "Git clone failed."
+        error_message = "Git operation timed out." if isinstance(exc, subprocess.TimeoutExpired) else (
+            exc.stderr.strip() if exc.stderr else "Git clone failed."
         )
 
         raise RepositoryCloneFailed(error_message) from exc

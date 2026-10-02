@@ -29,6 +29,25 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_clone_timeout_cleans_only_reserved_uncommitted_clone(self):
+        from app.indexer.errors import RepositoryCloneFailed
+        with patch.object(repository.subprocess, "run", side_effect=subprocess.TimeoutExpired("git", 120)):
+            with self.assertRaisesRegex(RepositoryCloneFailed, "timed out"):
+                repository.ingest_repository(self.db, "https://github.com/owner/timedout.git")
+        self.assertFalse((self.root / "owner/timedout").exists())
+        self.assertTrue((self.path / "sample.py").exists())
+        self.assertEqual(self.db.query(Repository).count(), 1)
+
+    def test_sync_git_timeout_preserves_checkpoint_and_metadata(self):
+        self.git.side_effect = subprocess.TimeoutExpired("git", 120)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+        self.assertEqual(self.db.query(CodeSymbol).count(), 1)
+        self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+        self.index.assert_not_called()
+        self.invalidate.assert_not_called()
+
     def test_redirected_clone_blocks_sync_and_full_before_reads(self):
         redirected = self.root / "redirected"
         self.path.rename(redirected)
@@ -322,6 +341,7 @@ class IndexerRecoveryTests(unittest.TestCase):
             target = Path(args[-1])
             target.mkdir(parents=True, exist_ok=True)
             (target / "main.py").write_text("def run():\n    return 1\n")
+            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
 
         with patch.object(repository.subprocess, "run", side_effect=clone), \
              patch.object(repository, "get_current_commit", return_value="initial"), \

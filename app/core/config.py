@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     benchmark_cache_bypass_enabled: bool = False
     embedding_device: str | None = None
     torch_num_threads: int | None = Field(default=None, ge=1)
+    git_timeout_seconds: int = Field(default=120, ge=1)
 
     model_config = SettingsConfigDict(
         env_file=".env",
