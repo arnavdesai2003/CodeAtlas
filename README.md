@@ -85,6 +85,8 @@ HTTP 409. See [sync recovery](docs/sync-recovery.md) for failure handling,
 installation and operational limits, and [repository errors](docs/repository-errors.md)
 for mutation error statuses and safe retry guidance. Full indexers reject pending jobs; do not
 run full indexing concurrently with sync.
+Incremental publication verifies every prepared bulk action succeeded before
+cache invalidation and checkpoint finalization; incomplete returns retain replayable work.
 Repository URLs must be plain GitHub owner/repository URLs; credentials, ports,
 query/fragment suffixes and escaped/ambiguous paths are rejected. The same
 [repository guide](docs/repository-errors.md) documents the accepted profile.

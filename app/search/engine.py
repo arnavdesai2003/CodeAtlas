@@ -543,12 +543,15 @@ def index_files_in_elasticsearch(
         )
 
     if actions:
-        bulk(
+        succeeded, errors = bulk(
             elasticsearch_client.options(
                 request_timeout=60
             ),
             actions,
         )
+
+        if errors or succeeded != len(actions):
+            raise RuntimeError("Incremental Elasticsearch bulk indexing was incomplete; retry synchronization.")
 
         elasticsearch_client.indices.refresh(
             index=index_name

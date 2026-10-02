@@ -29,6 +29,38 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_incomplete_incremental_bulk_keeps_checkpoint_and_replays_ids(self):
+        self.index.side_effect = lambda **kwargs: search_engine.index_files_in_elasticsearch(**kwargs)
+        with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \
+             patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "embed_texts", return_value=[[0.0] * 384]), \
+             patch.object(search_engine, "bulk") as bulk:
+            committed_ids = None
+            for outcome in ((0, []), (1, [{"index": {"status": 500}}]), (2, [])):
+                bulk.return_value = outcome
+                with self.subTest(outcome=outcome), self.assertRaisesRegex(RuntimeError, "bulk indexing was incomplete"):
+                    incremental.sync_repository(self.db, self.repo_id)
+                job = self.db.get(RepositorySyncJob, self.repo_id)
+                self.assertIsNotNone(job)
+                ids = [row.id for row in self.db.query(CodeSymbol)]
+                if committed_ids is None:
+                    committed_ids = ids
+                self.assertEqual(ids, committed_ids)
+                self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+                self.invalidate.assert_not_called()
+                es.indices.refresh.assert_not_called()
+            bulk.return_value = (1, [])
+            with patch.object(incremental, "parse_python_source") as parse:
+                result = incremental.sync_repository(self.db, self.repo_id)
+            parse.assert_not_called()
+            self.assertTrue(result["resumed"])
+            self.assertEqual(result["symbols_indexed"], 1)
+            self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+            self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "new")
+            es.indices.refresh.assert_called_once()
+            self.invalidate.assert_called_once_with(strict=True)
+
     def test_invalid_source_encoding_rolls_back_sync_and_can_retry(self):
         (self.path / "sample.py").write_bytes(b'def corrupt(): return "\xff"\n')
         with self.assertRaises((SyntaxError, UnicodeError)):

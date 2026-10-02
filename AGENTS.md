@@ -891,3 +891,18 @@ one-thread evaluation: 25 valid, all baseline metrics reproduced, hybrid
 Recall@10 .880 / MRR .499. Live corpus not rebuilt; no data/cache/settings/process
 changes or performance claim. Per-call construction adds allocation; ingestion
 performance not measured. Repository writer lock boundaries remain unchanged.
+
+## Latest milestone: incremental bulk completeness guard (2026-10-02)
+
+Incremental ES indexing now validates bulk returned errors and exact success
+count against actions before refresh/invalidation/checkpoint finalization,
+matching full indexing. Exceptions retain existing propagation. Defensive guard;
+ordinary item failures already raise by default and no silent live failure was
+observed. Pending sync preserves committed IDs; replay re-deletes/reindexes
+without reparsing. Empty-snapshot deletion behavior unchanged. See docs/sync-recovery.md.
+
+213 offline tests pass, including short/error/excess bulk returns, retained
+job/IDs/checkpoint, no refresh/cache invalidation, then successful replay.
+Live CPU/one-thread evaluation: 25 valid, every baseline reproduced, hybrid
+Recall@10 .880 / MRR .499. No live sync/reindex/data/cache/settings/process
+changes or performance claim. Publication remains non-atomic across stores.

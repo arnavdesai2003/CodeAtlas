@@ -116,3 +116,25 @@ checkpoint without a job need explicit reconciliation.
   Recall@10 **0.880** and MRR **0.499**.
 - No latency optimization or throughput claim in this milestone. The live
   corpus was not synchronized or reindexed merely to test recovery.
+
+## Incremental bulk completeness (2026-10-02)
+
+Incremental Elasticsearch indexing now checks the bulk helper's returned success
+count and error collection, as full indexing already does. Any errors or a count
+different from the prepared action count raise before refresh/cache invalidation/
+checkpoint finalization. Existing bulk exceptions still propagate. This is a
+defensive check; no live silent partial write was observed, and the helper's
+existing default behavior also raises on ordinary item failures.
+
+The existing pending sync journal retains committed file/symbol IDs after these
+failures. Retry deletes affected paths again and reindexes those same stored
+symbols; it does not reparse or advance to a newer target until publication ends.
+An empty symbol snapshot still follows the existing deletion/invalidation path.
+No cross-store atomicity or new indexing infrastructure was added.
+
+213 offline tests pass. New SQLite/mock-store coverage injects short counts,
+returned error items and excess counts, verifies retained journal/IDs/checkpoint,
+no refresh/cache invalidation, then successful replay with one strict invalidation.
+Live CPU/one-thread evaluation validated 25 cases and reproduced every baseline
+metric, hybrid Recall@10 .880 / MRR .499. Live corpus was not synchronized or
+reindexed; no data/cache/settings/process changes or performance claim.
