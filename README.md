@@ -262,5 +262,7 @@ independent fallback. See [cache coalescing](docs/cache-coalescing.md) for scope
 failure behavior and the new `cache_coalesced`/`coalescing_wait_ms` fields.
 The same guide documents isolated HTTP burst diagnostics with mixed queries and
 multiple API workers; these measurements include engine-counter instrumentation.
+Search rejects timed-out or failed-shard results and reports Elasticsearch outages
+with a sanitized 503; see [search failures](docs/search-failures.md).
 Public deployment hardening and the underlying transport cause of the measured
 resolution delay remain unresolved; an opt-in connection workaround is available.

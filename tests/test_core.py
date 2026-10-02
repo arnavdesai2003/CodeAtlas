@@ -27,6 +27,9 @@ from app.indexer.repository import parse_github_url
 from app.indexer.incremental import parse_git_diff
 from app.search import cache, engine, service
 from scripts import benchmark_api
+from app.search.errors import IncompleteSearchError
+from elastic_transport import ConnectionError as ElasticsearchConnectionError, ApiResponseMeta, NodeConfig
+from elasticsearch import ApiError
 
 
 class ServiceTests(unittest.TestCase):
@@ -99,6 +102,19 @@ class CacheTests(unittest.TestCase):
 
 
 class ApiTests(unittest.TestCase):
+    def test_backend_failures_return_sanitized_503_and_recover(self):
+        meta = ApiResponseMeta(503, "1.1", {}, 0.0, NodeConfig("http", "localhost", 9200))
+        for error in (ElasticsearchConnectionError("private backend URL"),
+                      ApiError("private failure", meta, {"secret": "backend details"}),
+                      IncompleteSearchError("private index name")):
+            with self.subTest(error=type(error).__name__):
+                self.search.side_effect = error
+                result = self.client.post("/search", json={"query": "q"})
+                self.assertEqual(result.status_code, 503)
+                self.assertEqual(result.json(), {"detail": "Search backend unavailable."})
+        self.search.side_effect = None
+        self.assertEqual(self.client.post("/search", json={"query": "q"}).status_code, 200)
+
     def setUp(self):
         app = FastAPI()
         app.include_router(routes.router)
@@ -164,6 +180,36 @@ class ApiTests(unittest.TestCase):
 
 
 class RetrievalTests(unittest.TestCase):
+    def test_hybrid_never_returns_surviving_branch_after_failure(self):
+        for failing in ("bm25_search", "semantic_search"):
+            with self.subTest(failing=failing), \
+                 patch.object(engine, "resolve_search_index", return_value="fixed"), \
+                 patch.object(engine, "bm25_search", return_value=[] ) as lexical, \
+                 patch.object(engine, "semantic_search", return_value=[]) as semantic:
+                (lexical if failing == "bm25_search" else semantic).side_effect = IncompleteSearchError("partial")
+                with self.assertRaises(IncompleteSearchError):
+                    engine.hybrid_search("q", 10)
+
+    def test_incomplete_branches_fail_without_cache_fill_then_retry(self):
+        for branch in (engine.bm25_search, engine.semantic_search):
+            for failure in ({"timed_out": True}, {"_shards": {"failed": 1}}):
+                with self.subTest(branch=branch.__name__, failure=failure), \
+                     patch.object(engine, "elasticsearch_client") as es, \
+                     patch.object(engine, "embed_text", return_value=[0.0] * 384), \
+                     patch.object(service, "get_cached_search", return_value=cache.CacheLookup(generation="g")), \
+                     patch.object(service, "set_cached_search") as write, \
+                     patch.object(service, "search_code", side_effect=lambda **kw: branch(**kw, index_name="fixed")):
+                    es.options.return_value.search.return_value = {"hits": {"hits": []}, **failure}
+                    with self.assertRaises(IncompleteSearchError):
+                        service.search_with_cache("q", 10)
+                    write.assert_not_called()
+                    self.assertFalse(service._miss_flights._pending)
+                    self.assertIs(es.options.return_value.search.call_args.kwargs["allow_partial_search_results"], False)
+                    es.options.return_value.search.return_value = {"timed_out": False,
+                        "_shards": {"failed": 0}, "hits": {"hits": []}}
+                    self.assertEqual(service.search_with_cache("q", 10)["results"], [])
+                    write.assert_called_once()
+
     def setUp(self):
         resolver = patch.object(engine, "resolve_search_index", return_value="concrete")
         resolver.start()

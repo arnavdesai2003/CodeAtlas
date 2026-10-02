@@ -536,3 +536,24 @@ alone do not justify distributed coordination. Next priority: inspect search/API
 failure behavior and deployment boundaries before further performance expansion;
 privileged forwarding-delay tracing and atomic metadata/cache visibility remain
 separate unresolved work.
+
+## Latest milestone: complete-result search failures (2026-10-01)
+
+Both retrieval branches set `allow_partial_search_results=false` and reject
+responses with `timed_out` or `_shards.failed` before formatting/fusion/cache
+fills. Hybrid does not return the surviving branch after a failure. Elasticsearch
+API/transport errors (including alias resolution) and `IncompleteSearchError`
+map to sanitized HTTP 503 `Search backend unavailable.`; unexpected model/code
+errors remain ordinary 500s. Existing transport retries/timeouts, Redis fallback
+and coalescing error propagation/retry remain unchanged. Existing valid cache
+hits can succeed during an ES outage. No new deadline or automatic API retries.
+See `docs/search-failures.md`.
+
+145 offline tests pass. CPU/one-thread live evaluation: 25 valid, zero invalid,
+every baseline metric reproduced, hybrid Recall@10 .880 / MRR .499. One guarded
+uncached HTTP run: 800 successes, zero cache hits/coalesced responses; single
+unmatched verification, no speedup claim. Initial server-readiness failure sent
+no measured requests. Timing and methodology are in `docs/performance.md`.
+Temporary port 8001 server stopped; port 8000, live cache generation, corpus,
+index/schema, .env/defaults untouched. Public deployment authentication and
+repository mutation failure disclosure remain separate priorities.

@@ -1,4 +1,7 @@
 from ipaddress import ip_address
+from elasticsearch import ApiError
+from elastic_transport import TransportError
+from app.search.errors import IncompleteSearchError
 
 from fastapi import APIRouter, Header, Request, Response
 from fastapi.responses import JSONResponse
@@ -180,11 +183,15 @@ def search_code(
             raise HTTPException(status_code=403, detail="Benchmark cache bypass is disabled.")
         response.headers["X-CodeAtlas-Cache-Bypassed"] = "true"
 
-    search_result = search_with_cache(
-        query=request.query,
-        limit=request.limit,
-        bypass_cache=benchmark_bypass,
-    )
+    try:
+        search_result = search_with_cache(
+            query=request.query,
+            limit=request.limit,
+            bypass_cache=benchmark_bypass,
+        )
+    except (ApiError, TransportError, IncompleteSearchError) as exc:
+        # Never expose backend URLs, index names or failure bodies to callers.
+        raise HTTPException(status_code=503, detail="Search backend unavailable.") from exc
 
     return {
         "query": request.query,

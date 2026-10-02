@@ -18,6 +18,7 @@ from app.search.embeddings import (
     embed_texts,
 )
 from app.search.reranker import rerank_results
+from app.search.errors import IncompleteSearchError
 
 def reranked_hybrid_search(
     query: str,
@@ -560,6 +561,12 @@ def index_files_in_elasticsearch(
 # Elasticsearch result formatting
 # ---------------------------------------------------------------------
 
+def _complete_hits(response) -> list[dict]:
+    if response.get("timed_out") or response.get("_shards", {}).get("failed", 0):
+        raise IncompleteSearchError("Elasticsearch search did not complete.")
+    return response["hits"]["hits"]
+
+
 def _format_hits(
     hits: list[dict],
 ) -> list[dict]:
@@ -674,11 +681,12 @@ def bm25_search(
             index=index_name or resolve_search_index(),
             size=limit,
             query=final_query,
+            allow_partial_search_results=False,
         )
     )
 
     return _format_hits(
-        response["hits"]["hits"]
+        _complete_hits(response)
     )
 
 
@@ -733,11 +741,12 @@ def semantic_search(
             index=index_name or resolve_search_index(),
             size=limit,
             knn=knn_query,
+            allow_partial_search_results=False,
         )
     )
 
     return _format_hits(
-        response["hits"]["hits"]
+        _complete_hits(response)
     )
 
 

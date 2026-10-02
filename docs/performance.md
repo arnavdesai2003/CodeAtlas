@@ -875,3 +875,24 @@ untouched. 142 offline tests pass, including diagnostic namespace isolation,
 legacy/current attribution, bad worker/timing/envelopes and exited-server cleanup.
 Only diagnostic code changed; the preceding milestone's quality evaluation is
 inherited, not a new measurement. No new retrieval quality claim is made.
+
+## Complete-result search failure verification (2026-10-01)
+
+Search now rejects timed-out/failed-shard Elasticsearch responses, explicitly
+disallows partial results in both branches, and returns sanitized HTTP 503 for
+Elasticsearch API/transport failures. See [failure semantics](search-failures.md).
+Complete-result ranking, candidate sizes and generation pinning are unchanged.
+CPU/one-thread multi-repository evaluation: 25 valid cases, zero invalid; every
+baseline metric reproduced, including hybrid Recall@10 .880 and MRR .499.
+
+A guarded uncached HTTP verification used one temporary loopback API process on
+8001, CPU embeddings, one PyTorch thread and pooled search connections, macOS
+26.6 / Python 3.13.15. Same ten queries, limit 10, 200 measured requests at each
+concurrency, model warm-up excluded. All 800 succeeded, zero cache hits or
+coalesced responses. Throughput at 1/5/10/20 concurrency: 24.47/150.93/154.60/
+147.65 req/s; average HTTP ms: 40.779/32.628/63.739/133.605; p95 ms:
+52.604/48.417/79.797/206.687. This is a single verification run without a matched
+control, not a performance improvement or sustained-capacity claim. An initial
+startup-race attempt failed health checks and sent no measured requests; the
+successful run waited for readiness first. Temporary server stopped; port 8000,
+live cache generation, .env, defaults, index/corpus and schema stayed unchanged.
