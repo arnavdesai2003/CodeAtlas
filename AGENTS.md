@@ -922,3 +922,18 @@ and sanitized captured logs. No live delivery/sync/data/cache/settings/process
 changes or new quality/performance claims. Tasks remain in-process, not durable;
 accepted response is not completion. Pre-journal failure requires retry, no
 automatic queue/retry added. Process termination is outside ordinary exceptions.
+
+## Latest milestone: bounded finite cache values (2026-10-02)
+
+Cache reads reject over-limit lists/non-dict rows, NaN/Infinity and float overflow
+including nested numeric values; miss keeps original generation. Writes check
+shape/count and JSON allow_nan=False, skip invalid writes without Redis calls.
+Valid empty/finite entries and source strings unchanged. Lua fencing/TTL/cache
+fallback unchanged; no flush/schema migration. Not full field-schema or fresh
+engine-output validation. See docs/cache-consistency.md.
+
+219 offline tests pass. Isolated one-worker CPU/one-thread HTTP smoke: 80
+successes including six Redis hits, same-query payload/attribution verified.
+Server stopped/private keys removed; legacy routing/index UUID/4,340 docs
+unchanged. No live generation/settings/process changes or performance claim.
+Retrieval evaluation remains inherited; no ranking/candidate/index changes.

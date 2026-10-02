@@ -47,3 +47,26 @@ writers, generation eviction, cleanup failures, malformed entries and outages.
 At that generation-fencing checkpoint, all 61 tests passed. An isolated live Redis namespace verified actual Lua reads,
 conditional fills, TTL, invalidation and metadata eviction; temporary keys were
 removed afterward. See [performance results](performance.md) for HTTP checks.
+
+## Cache value bounds (2026-10-02)
+
+Reads reject result lists exceeding the requested limit, non-dictionary rows,
+non-finite JSON constants (NaN/Infinity) and floating-point overflow such as 1e400,
+including nested values. Rejection becomes a miss bound to the original read
+generation, allowing ordinary retrieval/conditional replacement without rebinding
+to a newer generation. Valid empty lists and finite numeric values remain hits;
+words like `NaN` inside source strings remain unchanged.
+
+Writes reject invalid list shape/row count and serialize with allow_nan=False;
+failed serialization returns false without invoking the Redis Lua write. It does
+not block the caller's retrieved result. No Redis flush, generation rotation,
+entry schema migration or per-symbol field validation was added. This is a cache
+boundary, not fresh engine-output validation or a complete result schema.
+
+219 offline tests pass, covering numeric constants/overflow, nested values,
+over-limit lists, no-write failures and valid finite/empty hits alongside fencing
+and outage cases. An isolated CPU/one-thread, one-worker HTTP smoke had 80
+successful requests, including six Redis hits, verified payload equality and
+engine attribution. Server stopped/private namespace removed; legacy routing,
+index UUID and 4,340 documents unchanged. No live generation/settings/process
+changes. Retrieval evaluation remains inherited; no latency/throughput claim.

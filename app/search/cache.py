@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -48,6 +49,21 @@ def build_cache_key(query: str, limit: int, *, generation: str) -> str:
     return f"{ENTRY_PREFIX}{generation}:{_query_digest(query, limit)}"
 
 
+def _finite_float(value: str) -> float:
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError("Non-finite cached number")
+    return number
+
+
+def _reject_constant(value: str):
+    raise ValueError("Invalid cached JSON constant")
+
+
+def _valid_shape(results, limit):
+    return isinstance(results, list) and len(results) <= limit and all(isinstance(item, dict) for item in results)
+
+
 def get_cached_search(query: str, limit: int) -> CacheLookup:
     try:
         generation, value = redis_client.eval(
@@ -61,8 +77,8 @@ def get_cached_search(query: str, limit: int) -> CacheLookup:
     if value is None:
         return CacheLookup(generation=generation)
     try:
-        results = json.loads(value)
-        if not isinstance(results, list) or not all(isinstance(item, dict) for item in results):
+        results = json.loads(value, parse_float=_finite_float, parse_constant=_reject_constant)
+        if not _valid_shape(results, limit):
             raise ValueError("Invalid cached result shape")
     except (TypeError, ValueError):
         return CacheLookup(generation=generation)
@@ -75,11 +91,13 @@ def set_cached_search(
     # Never obtain a new token after retrieval: that would admit stale results.
     if generation is None:
         return False
+    if not _valid_shape(results, limit):
+        return False
     try:
         return bool(redis_client.eval(
             _WRITE_SCRIPT, 2, GENERATION_KEY,
             build_cache_key(query, limit, generation=generation),
-            generation, settings.search_cache_ttl, json.dumps(results),
+            generation, settings.search_cache_ttl, json.dumps(results, allow_nan=False),
         ))
     except Exception:
         # Redis failure must not prevent returning retrieved results.

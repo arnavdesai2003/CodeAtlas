@@ -307,6 +307,8 @@ because readers have no leases. Simultaneous misses with exact query/limit and
 known generation share work within each API process, with bounded waits and
 independent fallback. See [cache coalescing](docs/cache-coalescing.md) for scope,
 failure behavior and the new `cache_coalesced`/`coalescing_wait_ms` fields.
+Cache values exceeding the requested row limit or containing non-finite JSON
+numbers fall back to retrieval; invalid writes are skipped without changing fencing.
 The same guide documents isolated HTTP burst diagnostics with mixed queries and
 multiple API workers; these measurements include engine-counter instrumentation.
 Search rejects timed-out or failed-shard results and reports Elasticsearch outages

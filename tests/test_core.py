@@ -75,6 +75,28 @@ class ServiceTests(unittest.TestCase):
 
 
 class CacheTests(unittest.TestCase):
+    def test_nonfinite_and_over_limit_entries_become_generation_bound_misses(self):
+        for value in ('[{"score":NaN}]', '[{"score":Infinity}]', '[{"score":-Infinity}]',
+                      '[{"nested":{"value":1e400}}]', '[{},{}]'):
+            with self.subTest(value=value), patch.object(cache, "redis_client") as redis:
+                redis.eval.return_value = ["generation", value]
+                lookup = cache.get_cached_search("q", 1)
+                self.assertIsNone(lookup.results)
+                self.assertEqual(lookup.generation, "generation")
+
+    def test_invalid_cache_writes_do_not_contact_redis(self):
+        for results in ([{"score": float("nan")}], [{"nested": float("inf")}], [{}, {}], "invalid"):
+            with self.subTest(results=results), patch.object(cache, "redis_client") as redis:
+                self.assertFalse(cache.set_cached_search("q", 1, results, generation="g"))
+                redis.eval.assert_not_called()
+
+    def test_finite_cache_values_and_empty_results_still_work(self):
+        with patch.object(cache, "redis_client") as redis:
+            redis.eval.return_value = ["g", '[{"score":0.75,"code":"NaN is text"}]']
+            self.assertEqual(cache.get_cached_search("q", 1).results[0]["score"], .75)
+            redis.eval.return_value = ["g", "[]"]
+            self.assertEqual(cache.get_cached_search("q", 1).results, [])
+
     def test_normalization_and_limit(self):
         self.assertEqual(cache.build_cache_key(" Q  Test ", 10, generation="g"), cache.build_cache_key("q test", 10, generation="g"))
         self.assertNotEqual(cache.build_cache_key("q", 10, generation="g"), cache.build_cache_key("q", 5, generation="g"))
