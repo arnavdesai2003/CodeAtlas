@@ -106,6 +106,24 @@ class CacheTests(unittest.TestCase):
 
 
 class ApiTests(unittest.TestCase):
+    def test_search_query_boundary_preserves_exact_text(self):
+        query = "  " + "é" * 4092 + "\n "
+        result = self.client.post("/search", json={"query": query})
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.json()["query"], query)
+        self.search.assert_called_once_with(query=query, limit=10, bypass_cache=False)
+
+    def test_excessive_or_blank_queries_never_reach_service(self):
+        for query in ("x" * 4097, "é" * 4097, " ", "\t\r\n", "\u2003\u00a0"):
+            with self.subTest(length=len(query)):
+                response = self.client.post("/search", json={"query": query})
+                self.assertEqual(response.status_code, 422)
+        self.search.assert_not_called()
+
+    def test_query_length_is_documented_in_openapi(self):
+        schema = self.client.app.openapi()["components"]["schemas"]["SearchRequest"]
+        self.assertEqual(schema["properties"]["query"]["maxLength"], 4096)
+
     def test_invalid_clone_url_rejected_before_ingestion_services(self):
         for url in ("https://example.com/o/r", "https://[broken/o/r", "file:///tmp/repo",
                     "https://token@github.com/o/r", "https://github.com:443/o/r",

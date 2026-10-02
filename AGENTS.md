@@ -688,3 +688,18 @@ No live generation/corpus/schema/settings/port 8000 changes. Quality evaluation
 is inherited; no performance claim. Bound covers middleware body accumulation,
 not aggregate concurrency/transport buffers or receive deadlines. Public API
 authorization, rate/concurrency limits and slow-client policy remain separate.
+
+## Latest milestone: search query input bound (2026-10-01)
+
+SearchRequest query is now 1–4,096 Unicode characters and must contain
+non-whitespace text. Invalid HTTP input returns 422 before cache/coalescing/
+retrieval; OpenAPI publishes maxLength. Accepted text is returned unchanged,
+including surrounding whitespace/case/Unicode. Existing cache normalization,
+exact-text flights, ranking/candidates/model and result limits are unchanged.
+This is an API profile, not a model token limit; direct engine/service callers
+retain existing policy. Body-size 413 takes precedence. See `docs/request-limits.md`.
+
+178 offline tests pass, with boundary/Unicode/whitespace/no-service/OpenAPI checks.
+No live data/cache/corpus/schema/settings/process changes; prior quality and
+HTTP measurements remain inherited. No performance claim. Public authorization,
+aggregate concurrency and slow-client handling remain separate priorities.

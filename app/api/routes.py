@@ -5,7 +5,7 @@ from app.search.errors import IncompleteSearchError
 
 from fastapi import APIRouter, Header, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from app.core.clients import elasticsearch_client, redis_client
 from app.core.config import settings
@@ -34,6 +34,7 @@ class SearchRequest(BaseModel):
     query: str = Field(
         ...,
         min_length=1,
+        max_length=4096,
         description="Code search query",
     )
 
@@ -43,6 +44,13 @@ class SearchRequest(BaseModel):
         le=100,
         description="Maximum number of search results",
     )
+
+    @field_validator("query")
+    @classmethod
+    def require_query_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Query must contain non-whitespace text.")
+        return value
 
 
 @router.get("/health")

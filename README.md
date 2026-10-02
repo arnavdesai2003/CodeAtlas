@@ -100,6 +100,9 @@ route work. See [request limits](docs/request-limits.md), especially for large w
 
 ## Search
 
+Queries must contain non-whitespace text and be at most 4,096 characters. Invalid
+queries return 422 before retrieval; valid query text is preserved exactly.
+
 ```sh
 curl -X POST http://127.0.0.1:8000/search \
   -H 'Content-Type: application/json' \

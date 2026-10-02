@@ -35,3 +35,24 @@ aggregate memory across callers, response sizes, decompression, or CPU spent on
 accepted JSON. There is no receive deadline, concurrency cap, rate limit or public
 API authorization in this change. Slow clients and hostile local/process behavior
 need separate deployment controls.
+
+## Search query profile
+
+`POST /search` requires 1–4,096 Unicode characters and at least one character
+that is not whitespace according to Python's string whitespace check. Overlong
+and whitespace-only queries return 422 before cache/coalescing/retrieval work.
+The maximum is published in OpenAPI. This is an API input bound, not a tokenizer
+limit or a guarantee that a model uses every accepted character.
+
+Valid input is preserved exactly: leading/trailing whitespace, case and Unicode
+are not trimmed or normalized by validation. Existing cache-key normalization
+and exact-text coalescing remain unchanged. The HTTP body-byte bound still applies
+independently; 413 takes precedence when a body exceeds it. Direct Python engine
+and service callers retain their existing interfaces and are responsible for
+their own input policy. Search result limit stays 1–100, default 10.
+
+178 offline tests pass. New tests cover the exact character boundary with Unicode
+and surrounding whitespace, overlong ASCII/Unicode, whitespace-only text, no
+service execution on rejection and the OpenAPI maximum. Retrieval/ranking code,
+model/corpus/cache generation and running processes are unchanged. The prior
+live quality/HTTP checks remain inherited; no new performance claim is made.
