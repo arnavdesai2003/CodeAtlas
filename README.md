@@ -97,6 +97,8 @@ Git commands disable terminal input and use a configurable 120-second per-comman
 timeout. See [Git execution](docs/git-execution.md) for settings and recovery limits.
 Child Git commands discard inherited repository-location/object/index overrides;
 credential helpers and Git configuration remain operator-controlled.
+New Git sync requires a clone-owned `.git` directory and uses explicit metadata/
+worktree paths; redirected or missing metadata requires inspection.
 HTTP bodies have a configurable 1 MiB limit; oversized requests return 413 before
 route work. See [request limits](docs/request-limits.md), especially for large webhooks.
 Body receipt also has a configurable 30-second total deadline; stalled uploads

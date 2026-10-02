@@ -29,6 +29,26 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_missing_git_metadata_blocks_new_sync_before_git_or_mutation(self):
+        from app.indexer.errors import UnsafeClonePath
+        (self.path / ".git").rmdir()
+        with self.assertRaises(UnsafeClonePath):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.git.assert_not_called()
+        self.assertEqual(self.db.query(CodeSymbol).count(), 1)
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+
+    def test_pending_publication_resumes_without_git_metadata(self):
+        self.index.side_effect = RuntimeError("ES unavailable")
+        with self.assertRaises(RuntimeError):
+            incremental.sync_repository(self.db, self.repo_id)
+        (self.path / ".git").rmdir()
+        self.index.side_effect = None
+        self.git.reset_mock()
+        result = incremental.sync_repository(self.db, self.repo_id)
+        self.assertTrue(result["resumed"])
+        self.git.assert_not_called()
+
     def test_clone_timeout_cleans_only_reserved_uncommitted_clone(self):
         from app.indexer.errors import RepositoryCloneFailed
         with patch.object(repository.subprocess, "run", side_effect=subprocess.TimeoutExpired("git", 120)):
@@ -144,6 +164,7 @@ class IndexerRecoveryTests(unittest.TestCase):
         self.db.commit()
         self.path = self.root / "owner" / "demo"
         self.path.mkdir(parents=True)
+        (self.path / ".git").mkdir()
         (self.path / "sample.py").write_text("def new_function():\n    return 2\n")
         self.remote = "new"
         self.diff = "M\tsample.py"

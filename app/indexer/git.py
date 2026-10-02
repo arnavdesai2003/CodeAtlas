@@ -1,8 +1,10 @@
 """Bounded, noninteractive Git subprocess execution."""
 import os
 import subprocess
+from pathlib import Path
 
 from app.core.config import settings
+from app.indexer.errors import UnsafeClonePath
 
 
 REPOSITORY_ENVIRONMENT = frozenset({
@@ -23,3 +25,17 @@ def git_output(*args: str) -> str:
         timeout=settings.git_timeout_seconds,
     )
     return result.stdout.strip()
+
+
+def validate_git_metadata(repository_path: Path) -> None:
+    metadata = repository_path / ".git"
+    common = metadata / "commondir"
+    if metadata.is_symlink() or not metadata.is_dir() or common.exists() or common.is_symlink():
+        raise UnsafeClonePath("Repository Git metadata is missing or redirected.")
+
+
+def repository_git_output(repository_path: Path, *args: str) -> str:
+    validate_git_metadata(repository_path)
+    absolute = repository_path.absolute()
+    return git_output("-C", str(absolute), "--git-dir", str(absolute / ".git"),
+                      "--work-tree", str(absolute), *args)

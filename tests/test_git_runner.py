@@ -9,6 +9,30 @@ from app.indexer import git
 
 
 class GitRunnerTests(unittest.TestCase):
+    def test_missing_child_metadata_cannot_discover_parent_repository(self):
+        from app.indexer.errors import UnsafeClonePath
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            git.git_output("init", str(parent))
+            child = parent / "child"
+            child.mkdir()
+            with patch.object(git.subprocess, "run") as run:
+                with self.assertRaises(UnsafeClonePath):
+                    git.repository_git_output(child, "reset", "--hard")
+            run.assert_not_called()
+            (child / ".git").symlink_to(parent / ".git", target_is_directory=True)
+            with self.assertRaises(UnsafeClonePath):
+                git.repository_git_output(child, "status")
+
+    def test_explicit_repository_paths_and_commondir_rejection(self):
+        from app.indexer.errors import UnsafeClonePath
+        with tempfile.TemporaryDirectory() as directory:
+            chosen = Path(directory)
+            git.git_output("init", str(chosen))
+            self.assertEqual(Path(git.repository_git_output(chosen, "rev-parse", "--show-toplevel")).resolve(), chosen.resolve())
+            (chosen / ".git/commondir").write_text("../outside")
+            with self.assertRaises(UnsafeClonePath):
+                git.repository_git_output(chosen, "status")
     def test_repository_overrides_removed_only_from_child_environment(self):
         overrides = {name: "redirected" for name in git.REPOSITORY_ENVIRONMENT}
         overrides["GIT_ASKPASS"] = "trusted-helper"

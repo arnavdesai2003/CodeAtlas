@@ -49,4 +49,29 @@ repositories, sets conflicting parent git-dir/worktree/index overrides, and
 verifies rev-parse selects the requested repository and status creates no external
 index. Temporary fixtures are removed. No network/live clone/sync, corpus/cache,
 .env or running processes changed; previous quality metrics remain inherited.
-Git repository discovery when clone metadata is absent remains separate work.
+Repository discovery is constrained by the metadata policy below.
+
+## Clone-owned Git metadata
+
+New sync and clone commit/branch inspection require an actual unlinked `.git`
+directory. Missing directories, symlinked metadata, `.git` redirect files and
+`commondir` redirects (including dangling links) are rejected before Git runs.
+Repository commands also pass explicit absolute `--git-dir` and `--work-tree`
+paths, so they do not fall back to discovering a parent repository. This service
+supports its ordinary shallow clones, not linked worktrees or shared metadata.
+Unsafe metadata uses the existing sanitized 409 on sync; inspect it rather than
+removing/reconstructing metadata automatically. Ingestion failures during initial
+Git inspection retain pre-commit reserved-clone cleanup.
+
+Already committed pending sync publication resumes before metadata checks,
+because it publishes stored symbols without consulting Git. Full symbol indexing
+still operates on its recorded file snapshot; it does not invoke Git discovery.
+196 offline tests pass: real temporary Git fixtures verify chosen worktrees and
+parent-repository exclusion, while sync tests verify no mutation/Git call on
+missing metadata and pending replay without metadata. Read-only live audit found
+all six registered clones compatible. No live Git/network/sync, rows, clones,
+cache/index, settings or processes changed; retrieval metrics are inherited.
+
+This validates metadata layout, not every metadata entry or repository integrity.
+Symlinked refs/objects/config, malicious Git configuration and concurrent local
+replacement remain outside this scoped check and require trusted clone ownership.

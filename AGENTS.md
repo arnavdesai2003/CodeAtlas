@@ -796,3 +796,21 @@ removed; no network/live clone/sync/data/cache/settings/process changes or new
 quality/performance claims. User/local/system/config injection remains outside
 this scoped isolation. Missing clone Git metadata/discovery remains next inspection
 priority; public authorization scopes/concurrency remain separate.
+
+## Latest milestone: clone-owned Git metadata (2026-10-01)
+
+New sync and ingestion commit/branch reads require an unlinked .git directory
+with no commondir redirects; .git files/links/missing directories rejected.
+Repository commands pass absolute --git-dir/--work-tree as well as -C,
+preventing parent discovery. This supports ordinary generated shallow clones,
+not linked/shared worktrees. Unsafe metadata uses existing sync409; no automatic
+repair. Initial ingestion inspection failures retain pre-commit cleanup. Pending
+sync publication still resumes before checks; full symbol snapshot does not
+invoke Git. See docs/git-execution.md.
+
+196 offline tests pass, including real temporary Git chosen/parent fixtures,
+no-new-sync mutation on missing metadata and successful pending replay without it.
+Read-only compatibility audit: all six registered clones accepted; no paths/URLs
+printed. No live Git/network/sync/data/cache/settings/process changes or new
+quality/performance claim. Metadata-entry symlinks/integrity, malicious config
+and concurrent filesystem replacement remain outside this scoped layout check.

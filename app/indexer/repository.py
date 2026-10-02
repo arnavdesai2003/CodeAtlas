@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.db.models import CodeFile, Repository
 from app.indexer.errors import InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed
 from app.indexer.paths import regular_source_path, clone_directory
-from app.indexer.git import git_output
+from app.indexer.git import git_output, repository_git_output
 
 
 REPOSITORY_ROOT = Path("data/repos")
@@ -122,11 +122,11 @@ def discover_source_files(repository_path: Path) -> list[dict]:
 
 
 def get_current_commit(repository_path: Path) -> str:
-    return git_output("-C", str(repository_path), "rev-parse", "HEAD")
+    return repository_git_output(repository_path, "rev-parse", "HEAD")
 
 
 def get_current_branch(repository_path: Path) -> str:
-    branch = git_output("-C", str(repository_path), "branch", "--show-current")
+    branch = repository_git_output(repository_path, "branch", "--show-current")
 
     return branch or "unknown"
 
