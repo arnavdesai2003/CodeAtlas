@@ -29,6 +29,73 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_copy_publication_retry_preserves_source_identity_and_symbols(self):
+        destination = "copy\tline\n.py"
+        (self.path / destination).write_text("def copied(): pass\n")
+        source_id = self.file.id
+        source_symbol_id = self.db.query(CodeSymbol).one().id
+        self.diff = "C100\0sample.py\0" + destination + "\0"
+        self.index.side_effect = RuntimeError("ES unavailable")
+        with self.assertRaises(RuntimeError):
+            incremental.sync_repository(self.db, self.repo_id)
+        job = self.db.get(RepositorySyncJob, self.repo_id)
+        self.assertEqual(job.affected_paths, [destination])
+        self.assertEqual(job.stats["files_added"], 1)
+        self.assertEqual(job.stats["files_renamed"], 0)
+        self.assertEqual(self.db.query(CodeFile).filter_by(path="sample.py").one().id, source_id)
+        self.assertEqual(self.db.get(CodeSymbol, source_symbol_id).name, "old_function")
+        self.index.side_effect = None
+        with patch.object(incremental, "parse_python_source") as parse:
+            result = incremental.sync_repository(self.db, self.repo_id)
+        parse.assert_not_called()
+        self.assertTrue(result["resumed"])
+        self.assertEqual(self.db.query(CodeFile).count(), 2)
+        self.assertEqual({row.name for row in self.db.query(CodeSymbol)}, {"old_function", "copied"})
+        self.assertEqual(self.delete.call_args.kwargs["paths"], [destination])
+
+    def test_real_git_rename_retry_journals_both_exact_paths(self):
+        from app.indexer.git import git_output, repository_git_output
+        git_output("init", str(self.path))
+
+        def commit():
+            repository_git_output(self.path, "add", "-A")
+            repository_git_output(self.path, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                                  "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture")
+            return repository_git_output(self.path, "rev-parse", "HEAD")
+
+        old = commit()
+        self.repo.last_indexed_commit = old
+        self.db.commit()
+        destination = "renamed\tline\n.py"
+        (self.path / "sample.py").rename(self.path / destination)
+        target = commit()
+        repository_git_output(self.path, "update-ref", "refs/remotes/origin/main", target)
+        repository_git_output(self.path, "reset", "--hard", old)
+
+        def real_git(path, *args):
+            if args[0] == "fetch":
+                return ""
+            return repository_git_output(path, "-c", "diff.renames=true", *args)
+
+        self.git.side_effect = real_git
+        self.index.side_effect = RuntimeError("ES unavailable")
+        with self.assertRaises(RuntimeError):
+            incremental.sync_repository(self.db, self.repo_id)
+        job = self.db.get(RepositorySyncJob, self.repo_id)
+        self.assertEqual(set(job.affected_paths), {"sample.py", destination})
+        self.assertEqual(job.stats["files_renamed"], 1)
+        self.assertEqual({row.path for row in self.db.query(CodeFile)}, {destination})
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, old)
+        self.assertFalse((self.path / "sample.py").exists())
+        self.assertTrue((self.path / destination).is_file())
+        self.index.side_effect = None
+        self.git.reset_mock()
+        result = incremental.sync_repository(self.db, self.repo_id)
+        self.assertTrue(result["resumed"])
+        self.git.assert_not_called()
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, target)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "new_function")
+
     def test_real_git_type_changes_and_publication_recovery(self):
         from app.indexer.git import git_output, repository_git_output
         git_output("init", str(self.path))

@@ -71,3 +71,21 @@ still counts as files_added; a regular file becoming excluded counts as deleted.
 This fixes reporting only. Selection, journal/checkpoint rules, ranking and live
 data remain unchanged. No new live quality or performance measurement was taken;
 the preceding evaluation is inherited.
+
+## Rename and copy replay coverage (2026-10-02)
+
+205 offline tests pass. A real temporary Git fixture renames a regular source
+to a filename containing a tab/newline, then executes actual refs/diff/reset
+with rename detection explicitly enabled in the test. Mocked publication failure
+leaves both exact paths in the journal, old metadata removed, new symbols stored
+and the Git checkpoint unchanged. Retry resumes publication without Git calls
+and advances to the recorded target. Network fetch and external stores remain
+mocked; no live repositories are changed.
+
+A separate deterministic C100 fixture verifies copy handling: source file and
+symbol IDs remain intact; only the destination is affected/indexed/journaled,
+files_added increments and files_renamed stays zero. Retry after indexing failure
+does not reparse or delete source metadata. This tests consuming a copy record,
+not automatic Git copy detection. Production detection/configuration remains
+unchanged. No production code fix was needed; ranking, quality evaluation and
+performance measurements remain inherited from earlier milestones.

@@ -845,3 +845,18 @@ external target. See docs/source-paths.md.
 cache/settings/process changes. Quality evaluation inherited from preceding
 diff milestone; no new quality/performance claim. This proves local Git lifecycle
 with mocked external stores, not live cross-store atomicity or network recovery.
+
+## Latest milestone: rename/copy publication replay coverage (2026-10-02)
+
+205 offline tests pass. Real local Git rename fixture with tab/newline destination
+verifies refs/NUL diff/reset, both exact journal paths, removed old metadata,
+stored new symbols, retained checkpoint after publication failure, and resumed
+publication without Git calls. Test explicitly enables rename detection; actual
+production configuration unchanged. Deterministic C100 fixture verifies copy
+source file/symbol identity preservation, destination-only journaling, added vs
+renamed counts, and retry without reparsing. See docs/source-paths.md.
+
+Tests/docs only; no production fix needed. Fetch/ES/Redis mocked, temporary Git
+and SQLite fixtures removed. No live repository/data/cache/settings/process
+changes or new quality/performance claim. Copy test consumes C100, not automatic
+Git copy discovery. Prior evaluation remains inherited.
