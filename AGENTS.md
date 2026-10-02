@@ -1105,3 +1105,18 @@ count checks passed and scratch index removed. Live CPU/one-thread evaluation:
 25 valid cases, every baseline metric reproduced, hybrid Recall@10 .880 /
 MRR .499. No live corpus/routing/cache, settings or API changes; no performance
 claim or induced live shard failure.
+
+## Latest milestone: index embedding batch validation (2026-10-02)
+
+Full/incremental bulk paths validate all vectors before submission: exact symbol
+count, 384-dimensional lists and finite numeric values excluding booleans/strings.
+Invalid output leaves recovery work pending; sync checkpoint/cache finalization
+cannot proceed. Valid values are unchanged. Existing earlier deletion/staging
+operations remain non-atomic; ES still checks mapping/similarity constraints.
+See full-index-recovery documentation. No model/ranking changes.
+
+253 offline tests pass. Two real CPU/one-thread model batch vectors passed the
+validator without indexing. Live CPU/one-thread retrieval evaluation: 25 valid
+cases and all baseline metrics reproduced, hybrid Recall@10 .880 / MRR .499.
+No invalid live model output was observed, no corpus/routing/cache/settings/API
+changes and no performance claim.

@@ -101,3 +101,21 @@ that pending snapshot without parsing changed source again. An error alone is
 not evidence that replacement rolled back. Full publication has separate commit
 boundaries; see [database acknowledgement loss](atomic-publication.md#database-acknowledgement-loss)
 for recovery and the completed-job retry limitation.
+
+### Index embedding validation
+
+Both full and incremental indexing validate the entire returned embedding batch
+before building/submitting bulk actions: one vector per symbol, each a list of
+384 finite numeric values. Booleans, strings, nonfinite values, dimension errors
+and numeric overflow fail with a stable error. Valid values are neither coerced
+nor normalized by this check. Elasticsearch remains responsible for its mapping,
+representation and similarity-specific constraints; this is not a vector-quality
+or normalization audit.
+
+Malformed vectors cannot partially submit that batch. Earlier incremental path
+deletion or full staging work may already have occurred; existing recovery
+journals still govern retry. Tests verify no bulk submission, unchanged sync
+checkpoint and successful replay after valid output returns. Two real CPU model
+batch vectors passed validation without indexing, and existing-index retrieval
+evaluation reproduced baseline metrics. No invalid production model output was
+observed or repaired.

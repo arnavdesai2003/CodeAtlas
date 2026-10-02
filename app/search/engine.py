@@ -28,6 +28,23 @@ def refresh_symbol_index(index_name: str, *, client=None) -> None:
         raise RuntimeError("Elasticsearch refresh was incomplete; retry indexing.")
 
 
+def validate_index_embeddings(embeddings, expected_count: int) -> None:
+    if len(embeddings) != expected_count:
+        raise RuntimeError("Embedding count does not match symbol count.")
+    for vector in embeddings:
+        if not isinstance(vector, list) or len(vector) != EMBEDDING_DIMS:
+            raise RuntimeError("Index embedding has invalid dimensions.")
+        for value in vector:
+            if type(value) not in (int, float):
+                raise RuntimeError("Index embedding contains invalid numeric values.")
+            try:
+                finite = math.isfinite(value)
+            except OverflowError:
+                finite = False
+            if not finite:
+                raise RuntimeError("Index embedding contains invalid numeric values.")
+
+
 def reranked_hybrid_search(
     query: str,
     limit: int = 10,
@@ -305,10 +322,7 @@ def _write_repository_index(db: Session, repository_id: int, *, index_name: str)
         batch_size=32,
     )
 
-    if len(embeddings) != len(rows):
-        raise RuntimeError(
-            "Embedding count does not match symbol count."
-        )
+    validate_index_embeddings(embeddings, len(rows))
 
     # ---------------------------------------------------------------
     # Build Elasticsearch bulk operations.
@@ -497,10 +511,7 @@ def index_files_in_elasticsearch(
         batch_size=32,
     )
 
-    if len(embeddings) != len(rows):
-        raise RuntimeError(
-            "Embedding count does not match symbol count."
-        )
+    validate_index_embeddings(embeddings, len(rows))
 
     actions = []
 

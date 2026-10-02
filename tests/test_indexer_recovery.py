@@ -29,6 +29,47 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_invalid_index_vectors_block_bulk_and_keep_sync_replayable(self):
+        self.index.side_effect = lambda **kwargs: search_engine.index_files_in_elasticsearch(**kwargs)
+        with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \
+             patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "embed_texts") as embed, \
+             patch.object(search_engine, "bulk", return_value=(1, [])) as bulk:
+            es.indices.refresh.return_value = {"_shards": {"failed": 0}}
+            for vector in ([0.1] * 383, [float("nan")] * 384, [float("inf")] * 384,
+                           [True] * 384, ["0.1"] * 384):
+                embed.return_value = [vector]
+                with self.subTest(value=type(vector[0]).__name__), self.assertRaises(RuntimeError):
+                    incremental.sync_repository(self.db, self.repo_id)
+                self.assertIsNotNone(self.db.get(RepositorySyncJob, self.repo_id))
+                self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+                bulk.assert_not_called()
+                self.invalidate.assert_not_called()
+            embed.return_value = [[0.1] * 384]
+            self.assertTrue(incremental.sync_repository(self.db, self.repo_id)["resumed"])
+            bulk.assert_called_once()
+            self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+
+    def test_full_bulk_validates_entire_vector_batch_before_submission(self):
+        with patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es, \
+             patch.object(search_engine, "embed_texts", return_value=[[float("nan")] * 384]), \
+             patch.object(search_engine, "bulk") as bulk:
+            with self.assertRaisesRegex(RuntimeError, "invalid numeric"):
+                search_engine._write_repository_index(self.db, self.repo_id, index_name="stage")
+            bulk.assert_not_called()
+            es.indices.refresh.assert_not_called()
+
+    def test_vector_validation_preserves_values_and_rejects_late_invalid_vector(self):
+        valid = [0.1] * 384
+        original = list(valid)
+        search_engine.validate_index_embeddings([valid], 1)
+        self.assertEqual(valid, original)
+        for vectors in ([], [valid, [10 ** 1000] * 384], [valid, None]):
+            with self.subTest(count=len(vectors)), self.assertRaises(RuntimeError):
+                search_engine.validate_index_embeddings(vectors, 2)
+
     def test_incremental_refresh_failure_keeps_journal_and_checkpoint(self):
         self.index.side_effect = lambda **kwargs: search_engine.index_files_in_elasticsearch(**kwargs)
         with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \
