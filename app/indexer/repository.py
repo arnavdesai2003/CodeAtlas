@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import CodeFile, Repository
 from app.indexer.errors import InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed
+from app.indexer.paths import regular_source_path
 
 
 REPOSITORY_ROOT = Path("data/repos")
@@ -97,10 +98,8 @@ def discover_source_files(repository_path: Path) -> list[dict]:
     discovered_files = []
 
     for path in repository_path.rglob("*"):
-        if not path.is_file():
-            continue
-
-        if ".git" in path.parts:
+        relative_path = path.relative_to(repository_path)
+        if regular_source_path(repository_path, relative_path.as_posix()) is None:
             continue
 
         extension = path.suffix.lower()
@@ -109,8 +108,6 @@ def discover_source_files(repository_path: Path) -> list[dict]:
 
         if language is None:
             continue
-
-        relative_path = path.relative_to(repository_path)
 
         discovered_files.append(
             {

@@ -29,6 +29,47 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_sync_regular_file_to_symlink_removes_stale_metadata_and_symbols(self):
+        outside = self.root / "private.py"
+        outside.write_text("def secret(): pass\n")
+        (self.path / "sample.py").unlink()
+        (self.path / "sample.py").symlink_to(outside)
+        with patch.object(incremental, "calculate_file_hash") as hashed, \
+             patch.object(incremental, "parse_python_source") as parsed:
+            incremental.sync_repository(self.db, self.repo_id)
+        hashed.assert_not_called()
+        parsed.assert_not_called()
+        self.assertEqual(self.db.query(CodeFile).count(), 0)
+        self.assertEqual(self.db.query(CodeSymbol).count(), 0)
+        self.assertIn("sample.py", self.delete.call_args.kwargs["paths"])
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "new")
+
+    def test_full_symbols_skip_symlinks_and_clear_old_symbols(self):
+        outside = self.root / "private.py"
+        outside.write_text("def secret(): pass\n")
+        (self.path / "sample.py").unlink()
+        (self.path / "sample.py").symlink_to(outside)
+        with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root), \
+             patch("app.indexer.symbols.parse_python_source") as parsed:
+            result = index_repository_symbols(self.db, self.repo_id)
+        parsed.assert_not_called()
+        self.assertEqual(result["skipped_files"], 1)
+        self.assertEqual(self.db.query(CodeSymbol).count(), 0)
+
+    def test_symlink_replacement_deletion_failure_is_replayable(self):
+        (self.path / "sample.py").unlink()
+        (self.path / "sample.py").symlink_to(self.root / "absent.py")
+        self.delete.side_effect = RuntimeError("ES unavailable")
+        with self.assertRaises(RuntimeError):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+        self.assertEqual(self.db.query(CodeSymbol).count(), 0)
+        self.assertIsNotNone(self.db.get(RepositorySyncJob, self.repo_id))
+        self.delete.side_effect = None
+        result = incremental.sync_repository(self.db, self.repo_id)
+        self.assertTrue(result["resumed"])
+        self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

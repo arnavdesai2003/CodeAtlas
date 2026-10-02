@@ -9,6 +9,7 @@ from app.db.models import (
 from app.indexer.locking import repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.repository import REPOSITORY_ROOT, parse_github_url
+from app.indexer.paths import regular_source_path
 
 
 def index_repository_symbols(
@@ -72,9 +73,8 @@ def _index_repository_symbols(db: Session, repository_id: int) -> dict:
             skipped_files += 1
             continue
 
-        file_path = repository_path / Path(code_file.path)
-
-        if not file_path.exists():
+        file_path = regular_source_path(repository_path, code_file.path)
+        if file_path is None:
             skipped_files += 1
             continue
 

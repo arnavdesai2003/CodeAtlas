@@ -61,5 +61,5 @@ or clones were modified. Older stored URLs outside this profile need operator
 inspection before a new sync can parse them; existing pending sync publication
 still resumes before URL parsing. Do not rewrite stored URLs or remove clones
 automatically. This validation does not constrain Git redirects, credential
-helpers, local Git configuration or source-file symlinks; those are separate
-execution/filesystem boundaries.
+helpers or local Git configuration. Source-file symlinks are now excluded by
+the [source selection policy](source-paths.md), with its documented limits.

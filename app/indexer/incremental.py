@@ -14,6 +14,7 @@ from app.db.models import (
 from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.errors import RepositoryNotFound, RepositoryCloneMissing
+from app.indexer.paths import regular_source_path
 from app.indexer.repository import (
     LANGUAGE_BY_EXTENSION,
     REPOSITORY_ROOT,
@@ -278,13 +279,6 @@ def _sync_repository(
             if language is None:
                 continue
 
-            absolute_path = (
-                repository_path / path
-            )
-
-            if not absolute_path.exists():
-                continue
-
             code_file = (
                 db.query(CodeFile)
                 .filter(
@@ -294,6 +288,14 @@ def _sync_repository(
                 )
                 .first()
             )
+
+            absolute_path = regular_source_path(repository_path, path)
+            if absolute_path is None:
+                if code_file is not None:
+                    db.execute(delete(CodeSymbol).where(CodeSymbol.file_id == code_file.id))
+                    db.delete(code_file)
+                    files_deleted += 1
+                continue
 
             if code_file is None:
                 code_file = CodeFile(

@@ -612,3 +612,23 @@ before new sync. Retrieval/performance measurements remain inherited. This
 does not constrain redirects, Git credential/config behavior or source-file
 symlinks. Filesystem/execution boundaries remain the next concrete inspection
 priority; public authorization remains separate.
+
+## Latest milestone: source symlink exclusion (2026-10-01)
+
+Discovery/full symbol parsing/incremental sync share regular-file selection:
+exclude absolute/traversal/.git paths, source symlinks and symlinked directories
+inside clones, including internal/dangling links. Reads/hashes follow selection.
+Full symbol replacement skips excluded sources and clears old symbols; affected
+excluded supported paths in sync remove old file metadata/symbols and stay in
+the durable affected-path journal for Elasticsearch deletion. Missing/non-regular
+affected files are reconciled too. Deletion failures remain replayable, and
+checkpoint/cache requirements are unchanged. See `docs/source-paths.md`.
+
+162 offline tests pass, including symlink discovery, full replacement, sync
+stale removal and failure/replay fixtures. CPU/one-thread live evaluation: 25
+valid cases, every baseline reproduced, hybrid Recall@10 .880 / MRR .499.
+Live corpus was not rebuilt; no live sync/data/schema/cache/settings/process
+changes or performance claims. Old committed pending work/content is not scrubbed
+automatically. Checks assume stationary clones/trusted roots, not race-free opens;
+hard links, symlinked ancestors above clones, Git configuration/redirects and
+public authorization remain separate boundaries.

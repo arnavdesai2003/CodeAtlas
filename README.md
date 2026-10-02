@@ -88,6 +88,9 @@ run full indexing concurrently with sync.
 Repository URLs must be plain GitHub owner/repository URLs; credentials, ports,
 query/fragment suffixes and escaped/ambiguous paths are rejected. The same
 [repository guide](docs/repository-errors.md) documents the accepted profile.
+Discovery and symbol indexing exclude source symlinks; sync removes stale symbols
+when affected regular files become links. See [source selection](docs/source-paths.md)
+for recovery behavior and filesystem limits.
 
 ## Search
 
