@@ -9,6 +9,7 @@ from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 
 from app.db.models import CodeFile, Repository
+from app.indexer.errors import InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed
 
 
 REPOSITORY_ROOT = Path("data/repos")
@@ -41,13 +42,17 @@ LANGUAGE_BY_EXTENSION = {
 
 
 def parse_github_url(clone_url: str) -> tuple[str, str]:
-    parsed = urlparse(clone_url)
+    try:
+        parsed = urlparse(clone_url)
+        hostname = parsed.hostname
+    except ValueError as exc:
+        raise InvalidRepositoryURL("Invalid GitHub repository URL.") from exc
 
     if parsed.scheme not in {"http", "https"}:
-        raise ValueError("Only HTTP/HTTPS GitHub URLs are supported.")
+        raise InvalidRepositoryURL("Only HTTP/HTTPS GitHub URLs are supported.")
 
-    if parsed.hostname not in {"github.com", "www.github.com"}:
-        raise ValueError("Only github.com repositories are currently supported.")
+    if hostname not in {"github.com", "www.github.com"}:
+        raise InvalidRepositoryURL("Only github.com repositories are currently supported.")
 
     parts = [
         part
@@ -56,7 +61,7 @@ def parse_github_url(clone_url: str) -> tuple[str, str]:
     ]
 
     if len(parts) != 2:
-        raise ValueError(
+        raise InvalidRepositoryURL(
             "GitHub URL must have the format "
             "https://github.com/owner/repository"
         )
@@ -68,9 +73,9 @@ def parse_github_url(clone_url: str) -> tuple[str, str]:
         repository_name = repository_name[:-4]
 
     if not owner or not repository_name:
-        raise ValueError("Invalid GitHub repository URL.")
+        raise InvalidRepositoryURL("Invalid GitHub repository URL.")
     if owner in {".", ".."} or repository_name in {".", ".."}:
-        raise ValueError("Invalid GitHub repository path component.")
+        raise InvalidRepositoryURL("Invalid GitHub repository path component.")
 
     return owner, repository_name
 
@@ -164,7 +169,7 @@ def ingest_repository(
     )
 
     if existing_repository:
-        raise ValueError("Repository has already been added.")
+        raise RepositoryConflict("Repository has already been added.")
 
     repository_path = (
         REPOSITORY_ROOT
@@ -173,7 +178,7 @@ def ingest_repository(
     )
 
     if repository_path.exists():
-        raise ValueError(
+        raise RepositoryConflict(
             f"Repository directory already exists: {repository_path}"
         )
 
@@ -187,7 +192,7 @@ def ingest_repository(
     try:
         repository_path.mkdir()
     except FileExistsError as exc:
-        raise ValueError(f"Repository directory already exists: {repository_path}") from exc
+        raise RepositoryConflict(f"Repository directory already exists: {repository_path}") from exc
 
     commit_started = False
 
@@ -260,7 +265,7 @@ def ingest_repository(
             else "Git clone failed."
         )
 
-        raise RuntimeError(error_message) from exc
+        raise RepositoryCloneFailed(error_message) from exc
 
     except Exception:
         db.rollback()

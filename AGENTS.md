@@ -574,3 +574,22 @@ checks. No live webhook deliveries, database writes, clones, corpus/cache/index,
 from the prior milestone; no performance claim. This does not add public API
 authorization, replay deduplication, durable queues or request body bounds.
 Repository mutation error disclosure and deployment boundaries remain priorities.
+
+## Latest milestone: typed repository mutation failures (2026-10-01)
+
+Creation and sync routes return stable messages without raw Git stderr, clone
+paths or backend exception details. Known failures have typed exceptions:
+creation invalid URL 400, registration/directory conflict 409, Git failure 502;
+sync absent repository 404, expected clone missing 409, coordination/pending
+full-index work 409. Other failures stay 500; internal ValueError/FileNotFoundError
+are no longer mistaken for expected user conditions. Malformed URL parsing is
+classified before clone/database work. Successful schemas are unchanged, including
+creation local_path. Direct callers retain detailed causes and previous built-in
+exception family compatibility. See `docs/repository-errors.md`.
+
+156 offline tests pass, including new API statuses/disclosure/invalid-URL checks
+and all existing transaction/recovery/locking tests. Rollback, reservations,
+ambiguous-commit clone retention and journal replay are unchanged. No live
+ingestion/sync, data/schema/index/cache, .env/defaults or process changes; no
+performance claim and retrieval evaluation remains inherited. Public API
+authorization and request/resource boundaries remain separate priorities.

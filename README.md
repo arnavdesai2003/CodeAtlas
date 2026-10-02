@@ -82,7 +82,8 @@ checkpoint only after Elasticsearch updates and cache invalidation succeed.
 Retrying `/repositories/{id}/sync` resumes a pending target; `resumed=true`
 identifies that case. Concurrent sync requests for the same repository return
 HTTP 409. See [sync recovery](docs/sync-recovery.md) for failure handling,
-installation and operational limits. Full indexers reject pending jobs; do not
+installation and operational limits, and [repository errors](docs/repository-errors.md)
+for mutation error statuses and safe retry guidance. Full indexers reject pending jobs; do not
 run full indexing concurrently with sync.
 
 ## Search

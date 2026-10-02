@@ -13,6 +13,7 @@ from app.db.models import (
 )
 from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
 from app.indexer.parser import parse_python_source
+from app.indexer.errors import RepositoryNotFound, RepositoryCloneMissing
 from app.indexer.repository import (
     LANGUAGE_BY_EXTENSION,
     REPOSITORY_ROOT,
@@ -122,12 +123,12 @@ def _sync_repository(
     )
 
     if repository is None:
-        raise ValueError(
+        raise RepositoryNotFound(
             f"Repository {repository_id} does not exist."
         )
 
     if db.get(RepositoryFullIndexJob, repository_id) is not None:
-        raise RuntimeError("Finish pending full Elasticsearch indexing before synchronization.")
+        raise RepositorySyncInProgress("Finish pending full Elasticsearch indexing before synchronization.")
 
     pending = db.get(RepositorySyncJob, repository_id)
     if pending is not None:
@@ -146,7 +147,7 @@ def _sync_repository(
     )
 
     if not repository_path.exists():
-        raise FileNotFoundError(
+        raise RepositoryCloneMissing(
             f"Repository directory not found: "
             f"{repository_path}"
         )

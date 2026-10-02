@@ -19,6 +19,10 @@ from app.api.schemas import (
 )
 from app.db.database import engine, get_db
 from app.indexer.repository import ingest_repository
+from app.indexer.errors import (
+    InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed,
+    RepositoryNotFound, RepositoryCloneMissing,
+)
 from app.db.models import Repository
 from app.indexer.incremental import sync_repository, RepositorySyncInProgress
 
@@ -122,17 +126,14 @@ def add_repository(
             clone_url=request.clone_url,
         )
 
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=409,
-            detail=str(exc),
-        ) from exc
-
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
+    except InvalidRepositoryURL as exc:
+        raise HTTPException(status_code=400, detail="Invalid GitHub repository URL.") from exc
+    except RepositoryConflict as exc:
+        raise HTTPException(status_code=409, detail="Repository already registered or clone directory occupied.") from exc
+    except RepositoryCloneFailed as exc:
+        raise HTTPException(status_code=502, detail="Repository clone failed.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Repository creation failed; inspect state before retrying.") from exc
 
 @router.get("/repositories")
 def list_repositories(
@@ -229,25 +230,22 @@ def synchronize_repository(
         )
 
     except RepositorySyncInProgress as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail="Repository writer is busy or pending publication blocks synchronization.") from exc
 
-    except ValueError as exc:
+    except RepositoryNotFound as exc:
         raise HTTPException(
             status_code=404,
-            detail=str(exc),
+            detail="Repository not found.",
         ) from exc
 
-    except FileNotFoundError as exc:
+    except RepositoryCloneMissing as exc:
         raise HTTPException(
             status_code=409,
-            detail=str(exc),
+            detail="Repository clone is missing; inspect local state.",
         ) from exc
 
     except Exception as exc:
         raise HTTPException(
             status_code=500,
-            detail=(
-                f"{type(exc).__name__}: "
-                f"{str(exc)}"
-            ),
+            detail="Repository synchronization failed; retry to resume pending work.",
         ) from exc

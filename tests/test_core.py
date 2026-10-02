@@ -30,6 +30,10 @@ from scripts import benchmark_api
 from app.search.errors import IncompleteSearchError
 from elastic_transport import ConnectionError as ElasticsearchConnectionError, ApiResponseMeta, NodeConfig
 from elasticsearch import ApiError
+from app.indexer.errors import (
+    InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed,
+    RepositoryNotFound, RepositoryCloneMissing,
+)
 
 
 class ServiceTests(unittest.TestCase):
@@ -102,6 +106,38 @@ class CacheTests(unittest.TestCase):
 
 
 class ApiTests(unittest.TestCase):
+    def test_invalid_clone_url_rejected_before_ingestion_services(self):
+        for url in ("https://example.com/o/r", "https://[broken/o/r", "file:///tmp/repo"):
+            with self.subTest(url=url):
+                response = self.client.post("/repositories", json={"clone_url": url})
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json(), {"detail": "Invalid GitHub repository URL."})
+
+    def test_creation_errors_are_typed_and_sanitized(self):
+        for error, status in ((InvalidRepositoryURL("secret URL"), 400),
+                              (RepositoryConflict("private clone path"), 409),
+                              (RepositoryCloneFailed("Git stderr credentials"), 502),
+                              (ValueError("internal parser secret"), 500),
+                              (RuntimeError("ambiguous commit details"), 500)):
+            with self.subTest(error=type(error).__name__), \
+                 patch.object(routes, "ingest_repository", side_effect=error):
+                response = self.client.post("/repositories", json={"clone_url": "https://github.com/o/r"})
+                self.assertEqual(response.status_code, status)
+                self.assertNotIn(str(error), response.text)
+
+    def test_sync_errors_do_not_misclassify_internal_failures(self):
+        for error, status in ((RepositoryNotFound("private details"), 404),
+                              (RepositoryCloneMissing("private path"), 409),
+                              (routes.RepositorySyncInProgress("private journal"), 409),
+                              (ValueError("parser failure"), 500),
+                              (FileNotFoundError("model file"), 500),
+                              (RuntimeError("backend token"), 500)):
+            with self.subTest(error=type(error).__name__), \
+                 patch.object(routes, "sync_repository", side_effect=error):
+                response = self.client.post("/repositories/1/sync")
+                self.assertEqual(response.status_code, status)
+                self.assertNotIn(str(error), response.text)
+
     def test_backend_failures_return_sanitized_503_and_recover(self):
         meta = ApiResponseMeta(503, "1.1", {}, 0.0, NodeConfig("http", "localhost", 9200))
         for error in (ElasticsearchConnectionError("private backend URL"),
