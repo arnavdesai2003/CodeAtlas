@@ -41,73 +41,41 @@ def parse_python_source(source_code: str) -> list[CodeSymbol]:
 
     symbols: list[CodeSymbol] = []
 
-    def walk(
-        node,
-        current_class: str | None = None,
-        inside_function: bool = False,
-    ):
+    # Carry scope explicitly so deeply nested expression trees do not consume
+    # Python call-stack frames. Reverse pushes preserve the original preorder.
+    pending = [(tree.root_node, None, False)]
+    while pending:
+        node, current_class, inside_function = pending.pop()
+        child_class = current_class
+        child_inside_function = inside_function
         if node.type == "class_definition":
             class_name = _symbol_name(node, source)
-
-            symbols.append(
-                CodeSymbol(
-                    name=class_name,
-                    qualified_name=class_name,
-                    kind="class",
-                    start_line=node.start_point.row + 1,
-                    end_line=node.end_point.row + 1,
-                    code=_node_text(node, source),
-                )
-            )
-
-            for child in node.children:
-                walk(
-                    child,
-                    current_class=class_name,
-                    inside_function=False,
-                )
-
-            return
-
-        if node.type == "function_definition":
+            symbols.append(CodeSymbol(
+                name=class_name, qualified_name=class_name, kind="class",
+                start_line=node.start_point.row + 1,
+                end_line=node.end_point.row + 1,
+                code=_node_text(node, source),
+            ))
+            child_class = class_name
+            child_inside_function = False
+        elif node.type == "function_definition":
             function_name = _symbol_name(node, source)
-
             if current_class is not None and not inside_function:
                 kind = "method"
-                qualified_name = (
-                    f"{current_class}.{function_name}"
-                )
+                qualified_name = f"{current_class}.{function_name}"
             else:
                 kind = "function"
                 qualified_name = function_name
-
-            symbols.append(
-                CodeSymbol(
-                    name=function_name,
-                    qualified_name=qualified_name,
-                    kind=kind,
-                    start_line=node.start_point.row + 1,
-                    end_line=node.end_point.row + 1,
-                    code=_node_text(node, source),
-                )
-            )
-
-            for child in node.children:
-                walk(
-                    child,
-                    current_class=current_class,
-                    inside_function=True,
-                )
-
-            return
-
-        for child in node.children:
-            walk(
-                child,
-                current_class=current_class,
-                inside_function=inside_function,
-            )
-
-    walk(tree.root_node)
+            symbols.append(CodeSymbol(
+                name=function_name, qualified_name=qualified_name, kind=kind,
+                start_line=node.start_point.row + 1,
+                end_line=node.end_point.row + 1,
+                code=_node_text(node, source),
+            ))
+            child_inside_function = True
+        pending.extend(
+            (child, child_class, child_inside_function)
+            for child in reversed(node.children)
+        )
 
     return symbols

@@ -1047,3 +1047,17 @@ CR/CRLF paths through metadata, journals and retries. See `docs/git-execution.md
 240 offline tests pass. Live read-only CPU/one-thread evaluation reproduced all
 baseline metrics with 25 cases, hybrid Recall@10 .880 / MRR .499. No live corpus
 rebuild, cache/settings changes, API restart or new performance claim.
+
+## Latest milestone: iterative symbol traversal (2026-10-02)
+
+Replaced recursive Python Tree-sitter traversal with an explicit stack, preserving
+preorder and existing class/function scope behavior. Reproduced RecursionError on
+a valid 1,500-term binary expression before a function; extraction now succeeds.
+No parsing rejection policy or source-size limits added. Read-only comparison of
+old/new extraction across 219 local Python files matched every symbol field/order.
+See `docs/source-audit.md` for limits and verification.
+
+242 offline tests pass, including deep-tree and nested/sibling scope regressions.
+Live CPU/one-thread evaluation: 25 valid cases, every baseline metric reproduced,
+hybrid Recall@10 .880 / MRR .499. Existing corpus was not rebuilt; no cache,
+settings or API process changes and no performance claim.
