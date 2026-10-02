@@ -322,3 +322,8 @@ Invalid or non-finite retrieval scores also fail before fusion/caching; valid
 score ranking remains unchanged.
 Public deployment hardening and the underlying transport cause of the measured
 resolution delay remain unresolved; an opt-in connection workaround is available.
+
+Inspect registered Python source without reindexing:
+`.venv/bin/python -B -m scripts.audit_python_sources`
+(optionally `--repository-id ID`). See [source audit](docs/source-audit.md) for
+finding categories and grammar/snapshot limitations.

@@ -978,3 +978,18 @@ together to load types; direct key consumers use get_secret_value().
 228 offline tests pass with representation/key JSON/type checks and existing
 webhook signatures/unconfigured rejection. No actual secrets printed, .env/live
 delivery/data/cache/settings/process changes. Quality/performance inherited.
+
+## Latest milestone: read-only Python source audit (2026-10-02)
+
+`scripts.audit_python_sources` checks registered Python files with the installed
+Tree-sitter grammar, encoding-aware reads and existing source path exclusions.
+Optional `--repository-id ID` restricts inspection. JSON findings distinguish
+unavailable/excluded paths, source read errors and grammar recovery; findings
+return nonzero. Unsafe clone boundaries and nonexistent selected repositories
+abort. No Git, metadata, symbol, index or cache writes occur. Inspection is not a
+locked snapshot or Python semantic validation. Tolerant production parsing stays
+unchanged. See `docs/source-audit.md`.
+
+Read-only live inspection: six repositories, 219 Python files, all clean.
+230 offline tests pass. No new retrieval or performance measurements; prior
+quality baseline remains applicable. Running APIs and settings were unchanged.
