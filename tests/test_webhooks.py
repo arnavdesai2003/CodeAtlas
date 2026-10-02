@@ -95,6 +95,7 @@ class WebhookTests(unittest.TestCase):
         self.sync.assert_called_once_with(7)
         db.close.assert_called_once()
 
+
     def test_unknown_repository_does_not_schedule_work(self):
         db = self.session.return_value
         db.query.return_value.filter.return_value.first.return_value = None
@@ -102,3 +103,33 @@ class WebhookTests(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.sync.assert_not_called()
         db.close.assert_called_once()
+
+
+class WebhookBackgroundTests(unittest.TestCase):
+    def test_session_creation_failure_is_recorded_without_raw_details(self):
+        with patch.object(webhooks, "SessionLocal", side_effect=RuntimeError("private connection URL")), \
+             patch.object(webhooks, "sync_repository") as sync, \
+             self.assertLogs(webhooks.logger, level="ERROR") as logs:
+            webhooks.sync_repository_background(7)
+        sync.assert_not_called()
+        self.assertIn("repository_id=7 error_type=RuntimeError", logs.output[0])
+        self.assertNotIn("private connection URL", str(logs.output))
+
+    def test_sync_failure_closes_session_and_does_not_log_exception_body(self):
+        with patch.object(webhooks, "SessionLocal") as session, \
+             patch.object(webhooks, "sync_repository", side_effect=ValueError("private token")), \
+             self.assertLogs(webhooks.logger, level="ERROR") as logs:
+            webhooks.sync_repository_background(8)
+        session.return_value.close.assert_called_once()
+        self.assertIn("error_type=ValueError", logs.output[0])
+        self.assertNotIn("private token", str(logs.output))
+
+    def test_session_close_failure_is_recorded_without_escaping(self):
+        with patch.object(webhooks, "SessionLocal") as session, \
+             patch.object(webhooks, "sync_repository", return_value={"private": "details"}), \
+             self.assertLogs(webhooks.logger, level="INFO") as logs:
+            session.return_value.close.side_effect = RuntimeError("private close URL")
+            webhooks.sync_repository_background(9)
+        self.assertIn("sync completed repository_id=9", logs.output[0])
+        self.assertIn("session close failed repository_id=9 error_type=RuntimeError", logs.output[1])
+        self.assertNotIn("private", str(logs.output))

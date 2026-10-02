@@ -76,6 +76,8 @@ An unset/empty secret disables webhook processing with HTTP 503. Missing or
 invalid signatures return 401 before JSON parsing; signed malformed payloads
 return 400 and do not schedule synchronization. See
 [webhook handling](docs/webhooks.md) for response semantics and limits.
+Background completion/failures use the webhook logger; failure records include
+repository ID and exception type without raw backend messages.
 
 Sync records unfinished publication work in PostgreSQL and advances its
 checkpoint only after Elasticsearch updates and cache invalidation succeed.

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 
 from fastapi import (
     APIRouter,
@@ -19,6 +20,7 @@ router = APIRouter(
     prefix="/webhooks",
     tags=["webhooks"],
 )
+logger = logging.getLogger(__name__)
 
 
 def verify_github_signature(
@@ -55,28 +57,28 @@ def verify_github_signature(
 def sync_repository_background(
     repository_id: int,
 ) -> None:
-    db = SessionLocal()
+    db = None
 
     try:
-        result = sync_repository(
+        db = SessionLocal()
+        sync_repository(
             db=db,
             repository_id=repository_id,
         )
 
-        print(
-            "GitHub webhook sync completed:",
-            result,
-        )
+        logger.info("GitHub webhook sync completed repository_id=%s", repository_id)
 
     except Exception as exc:
-        print(
-            "GitHub webhook sync failed:",
-            type(exc).__name__,
-            str(exc),
-        )
+        logger.error("GitHub webhook sync failed repository_id=%s error_type=%s",
+                     repository_id, type(exc).__name__)
 
     finally:
-        db.close()
+        if db is not None:
+            try:
+                db.close()
+            except Exception as exc:
+                logger.error("GitHub webhook session close failed repository_id=%s error_type=%s",
+                             repository_id, type(exc).__name__)
 
 
 @router.post(

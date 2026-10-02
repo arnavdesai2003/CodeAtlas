@@ -906,3 +906,19 @@ job/IDs/checkpoint, no refresh/cache invalidation, then successful replay.
 Live CPU/one-thread evaluation: 25 valid, every baseline reproduced, hybrid
 Recall@10 .880 / MRR .499. No live sync/reindex/data/cache/settings/process
 changes or performance claim. Publication remains non-atomic across stores.
+
+## Latest milestone: webhook background session lifecycle (2026-10-02)
+
+Background SessionLocal creation is inside error handling, with conditional
+finally close; ordinary close failures are contained/logged too. Replaced raw
+prints with app.api.webhooks logging: completion INFO, failure/close ERROR,
+repository ID and exception type only, no raw exception/result/traceback.
+Completion plus close failure means sync succeeded but cleanup failed; no claim
+that failed close releases resources. Existing sync rollback/locks/journals
+unchanged. See docs/webhooks.md for logging and retry limits.
+
+216 offline tests pass, including session creation/sync/close failure containment
+and sanitized captured logs. No live delivery/sync/data/cache/settings/process
+changes or new quality/performance claims. Tasks remain in-process, not durable;
+accepted response is not completion. Pre-journal failure requires retry, no
+automatic queue/retry added. Process termination is outside ordinary exceptions.

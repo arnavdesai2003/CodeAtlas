@@ -36,3 +36,26 @@ This is a scoped webhook fix. It adds no replay/delivery deduplication, durable
 background queue or authorization for repository CRUD/search
 routes. Keep local API servers on loopback; public deployment controls remain
 separate work.
+
+## Background session lifecycle (2026-10-02)
+
+Session creation now occurs inside the background task's exception handler.
+Sync failures and session creation/close failures are recorded through the
+`app.api.webhooks` logger with repository ID and exception type, without raw
+exception text, traceback or result payload. Completion is an INFO record;
+failures are ERROR records. Configure logging levels/collection to retain the
+records needed operationally. A completion followed by a close-failure record
+means sync returned successfully but session cleanup failed.
+
+If a session was created, close is attempted in finally, including after sync
+failure. Ordinary close failures are logged without escaping the accepted task;
+this does not guarantee a failed close released every resource. Process/task
+termination remains outside ordinary Exception handling. Sync's existing rollback,
+locks and pending-job recovery are unchanged.
+
+216 offline tests pass, including session creation, sync and close failures with
+sanitized captured logs. No live deliveries/sync/DB/cache/process changes;
+retrieval/performance checks inherited. Acceptance still means scheduled, not
+completed. In-process tasks can be lost on process exit, and failures before a
+sync journal exists require manual retry; there is no durable delivery queue or
+automatic retry. Use the normal authenticated sync route to resume pending work.
