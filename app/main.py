@@ -26,7 +26,8 @@ app = FastAPI(
 )
 
 
-app.add_middleware(RequestBodyLimit, max_bytes=settings.request_body_max_bytes)
+app.add_middleware(RequestBodyLimit, max_bytes=settings.request_body_max_bytes,
+                   timeout_seconds=settings.request_body_timeout_seconds)
 app.include_router(router)
 app.include_router(webhook_router)
 

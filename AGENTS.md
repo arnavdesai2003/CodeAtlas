@@ -703,3 +703,18 @@ retain existing policy. Body-size 413 takes precedence. See `docs/request-limits
 No live data/cache/corpus/schema/settings/process changes; prior quality and
 HTTP measurements remain inherited. No performance claim. Public authorization,
 aggregate concurrency and slow-client handling remain separate priorities.
+
+## Latest milestone: HTTP body receipt deadline (2026-10-01)
+
+RequestBodyLimit uses one asyncio timeout for total receipt, default
+REQUEST_BODY_TIMEOUT_SECONDS=30 (finite positive). Chunks do not reset the timer;
+it ends before route dispatch. Expiry returns stable 408 without route work;
+oversize observed first remains 413. External cancellation propagates. Search/
+sync/Git/ES execution is unchanged. Restart to change setting; .env.example
+updated, .env untouched. See `docs/request-limits.md` for slow-upload limits.
+
+181 offline tests pass: partial-body cancellation/no dispatch, execution outside
+timer and external cancellation, alongside size/signature coverage. No live
+data/cache/corpus/schema/settings/process changes; quality/HTTP checks inherited,
+no performance claim. Aggregate concurrency, public authorization and proxy/
+server connection policies remain separate priorities.

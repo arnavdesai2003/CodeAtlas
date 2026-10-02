@@ -32,8 +32,8 @@ port 8000 process changes; prior retrieval evaluation remains inherited.
 
 This bounds middleware accumulation, not transport/server chunk buffers,
 aggregate memory across callers, response sizes, decompression, or CPU spent on
-accepted JSON. There is no receive deadline, concurrency cap, rate limit or public
-API authorization in this change. Slow clients and hostile local/process behavior
+accepted JSON. There is no concurrency cap, rate limit or public
+API authorization in this change. Hostile local/process behavior
 need separate deployment controls.
 
 ## Search query profile
@@ -56,3 +56,21 @@ and surrounding whitespace, overlong ASCII/Unicode, whitespace-only text, no
 service execution on rejection and the OpenAPI maximum. Retrieval/ranking code,
 model/corpus/cache generation and running processes are unchanged. The prior
 live quality/HTTP checks remain inherited; no new performance claim is made.
+
+## Body receipt deadline
+
+`REQUEST_BODY_TIMEOUT_SECONDS` defaults to 30 seconds and must be finite and
+positive. Restart the API to change it. One deadline covers total body receipt,
+starting when middleware begins receiving; chunks do not restart the clock.
+Partial/stalled uploads return 408 with
+`{"detail":"Request body receive timeout."}` without dispatching route work.
+Oversized bodies still return 413 when observed before expiry. Legitimate slow
+uploads may require an explicitly longer receipt deadline.
+
+The timeout ends before route dispatch. It is not a search, sync, whole-request,
+connection-idle or response-send deadline; Git/Elasticsearch policies remain.
+External task cancellation propagates instead of becoming 408. Receipt assumes
+cooperative ASGI behavior; blocked event loops/proxy buffers remain separate.
+181 offline tests pass, including partial-body cancellation/no dispatch, route
+execution outside the timer and external cancellation. No live data/settings/
+process changes or new performance measurements; prior live checks are inherited.

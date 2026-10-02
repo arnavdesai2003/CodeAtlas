@@ -1,11 +1,48 @@
 """ASGI body-limit boundaries, without servers or dependencies."""
 import unittest
+import asyncio
 from unittest.mock import AsyncMock
 
 from app.api.body_limit import RequestBodyLimit
 
 
 class BodyLimitTests(unittest.IsolatedAsyncioTestCase):
+    async def test_partial_body_deadline_cancels_receive_without_dispatch(self):
+        app, send = AsyncMock(), AsyncMock()
+        calls = 0
+        cancelled = asyncio.Event()
+
+        async def receive():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return {"type": "http.request", "body": b"a", "more_body": True}
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        await RequestBodyLimit(app, 4, timeout_seconds=.01)({"type": "http"}, receive, send)
+        app.assert_not_called()
+        self.assertTrue(cancelled.is_set())
+        self.assertEqual(send.call_args_list[0].args[0]["status"], 408)
+
+    async def test_route_execution_is_outside_body_deadline(self):
+        async def app(scope, receive, send):
+            await asyncio.sleep(.02)
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+        send = AsyncMock()
+        await RequestBodyLimit(app, 4, timeout_seconds=.01)({"type": "http"},
+            AsyncMock(return_value={"type": "http.request", "body": b"ok"}), send)
+        self.assertEqual(send.call_args.args[0]["status"], 200)
+
+    async def test_external_cancellation_is_not_reported_as_timeout(self):
+        app, send = AsyncMock(), AsyncMock()
+        with self.assertRaises(asyncio.CancelledError):
+            await RequestBodyLimit(app, 4)({"type": "http"},
+                AsyncMock(side_effect=asyncio.CancelledError), send)
+        app.assert_not_called()
+        send.assert_not_called()
     async def run_body(self, chunks, *, limit=4, headers=()):
         messages = [{"type": "http.request", "body": chunk,
                      "more_body": i < len(chunks) - 1} for i, chunk in enumerate(chunks)]

@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     torch_num_threads: int | None = Field(default=None, ge=1)
     git_timeout_seconds: int = Field(default=120, ge=1)
     request_body_max_bytes: int = Field(default=1_048_576, ge=1)
+    request_body_timeout_seconds: float = Field(default=30.0, gt=0, allow_inf_nan=False)
 
     model_config = SettingsConfigDict(
         env_file=".env",

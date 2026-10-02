@@ -97,6 +97,8 @@ Git commands disable terminal input and use a configurable 120-second per-comman
 timeout. See [Git execution](docs/git-execution.md) for settings and recovery limits.
 HTTP bodies have a configurable 1 MiB limit; oversized requests return 413 before
 route work. See [request limits](docs/request-limits.md), especially for large webhooks.
+Body receipt also has a configurable 30-second total deadline; stalled uploads
+return 408 without starting route work. Search/sync execution remains separate.
 
 ## Search
 
