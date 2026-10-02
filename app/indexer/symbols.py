@@ -10,6 +10,7 @@ from app.indexer.locking import repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.repository import REPOSITORY_ROOT, parse_github_url
 from app.indexer.paths import regular_source_path, clone_directory
+from app.indexer.source import read_python_source
 
 
 def index_repository_symbols(
@@ -74,10 +75,7 @@ def _index_repository_symbols(db: Session, repository_id: int) -> dict:
             skipped_files += 1
             continue
 
-        source_code = file_path.read_text(
-            encoding="utf-8",
-            errors="replace",
-        )
+        source_code = read_python_source(file_path)
 
         symbols = parse_python_source(source_code)
 

@@ -16,6 +16,7 @@ from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.errors import RepositoryNotFound, RepositoryCloneMissing
 from app.indexer.paths import regular_source_path, clone_directory
+from app.indexer.source import read_python_source
 from app.indexer.git import repository_git_output, validate_git_metadata
 from app.indexer.repository import (
     LANGUAGE_BY_EXTENSION,
@@ -346,12 +347,7 @@ def _sync_repository(
             # Currently Tree-sitter support is
             # implemented for Python.
             if language == "python":
-                source_code = (
-                    absolute_path.read_text(
-                        encoding="utf-8",
-                        errors="replace",
-                    )
-                )
+                source_code = read_python_source(absolute_path)
 
                 symbols = parse_python_source(
                     source_code

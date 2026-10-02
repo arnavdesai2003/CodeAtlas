@@ -29,6 +29,25 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_invalid_source_encoding_rolls_back_sync_and_can_retry(self):
+        (self.path / "sample.py").write_bytes(b'def corrupt(): return "\xff"\n')
+        with self.assertRaises((SyntaxError, UnicodeError)):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+        self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+        self.index.assert_not_called()
+        (self.path / "sample.py").write_text("def repaired(): pass\n")
+        incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "repaired")
+
+    def test_invalid_source_encoding_rolls_back_full_symbol_replacement(self):
+        (self.path / "sample.py").write_bytes(b'def corrupt(): return "\xff"\n')
+        with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root):
+            with self.assertRaises((SyntaxError, UnicodeError)):
+                index_repository_symbols(self.db, self.repo_id)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "old_function")
+        self.assertIsNone(self.db.get(RepositoryFullIndexJob, self.repo_id))
     def test_copy_publication_retry_preserves_source_identity_and_symbols(self):
         destination = "copy\tline\n.py"
         (self.path / destination).write_text("def copied(): pass\n")

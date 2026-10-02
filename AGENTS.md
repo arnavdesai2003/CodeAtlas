@@ -860,3 +860,20 @@ Tests/docs only; no production fix needed. Fetch/ES/Redis mocked, temporary Git
 and SQLite fixtures removed. No live repository/data/cache/settings/process
 changes or new quality/performance claim. Copy test consumes C100, not automatic
 Git copy discovery. Prior evaluation remains inherited.
+
+## Latest milestone: encoding-aware Python source reads (2026-10-02)
+
+Full/incremental symbol parsing share read_python_source via tokenize.open,
+honoring coding declarations/UTF-8 BOM and failing on invalid encodings rather
+than replacement-decoding. Unicode enters existing UTF-8 Tree-sitter parser;
+raw hashes/newline semantics/language scope unchanged. Decode failures roll back
+metadata/symbol replacement, preserve checkpoint and create no new journal.
+Pending jobs replay stored symbols unchanged. Fix invalid source upstream;
+do not edit generated clones. No automatic rebuild of older lossy code. See
+docs/source-paths.md for reconciliation/limits.
+
+210 offline tests pass, with Latin-1/BOM/cookie/error and sync/full rollback checks.
+Live CPU/one-thread evaluation: 25 valid, every baseline reproduced, hybrid
+Recall@10 .880 / MRR .499. Live corpus not rebuilt; no claim about quality after
+re-decoding existing content. No live data/cache/settings/process changes or
+performance claim. Ranking/publication unchanged.

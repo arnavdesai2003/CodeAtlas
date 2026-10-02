@@ -89,3 +89,28 @@ does not reparse or delete source metadata. This tests consuming a copy record,
 not automatic Git copy detection. Production detection/configuration remains
 unchanged. No production code fix was needed; ranking, quality evaluation and
 performance measurements remain inherited from earlier milestones.
+
+## Python source encoding (2026-10-02)
+
+Full symbol replacement and incremental parsing now use `tokenize.open`, which
+honors Python encoding declarations and UTF-8 BOMs instead of unconditional
+UTF-8 replacement decoding. The resulting Unicode text enters Tree-sitter through
+the existing UTF-8 parser representation. Declared non-UTF-8 source retains its
+actual characters; invalid/unknown encodings fail rather than storing replacement
+characters. Newline handling matches the prior text reader. File hashes still
+describe raw file bytes; supported languages/symbol extraction remain unchanged.
+
+Decode failure during sync rolls back metadata/symbol changes, keeps the previous
+checkpoint and creates no publication job; full symbol replacement rolls back
+its deletion and creates no full job. Existing pending publication continues to
+replay already stored symbols without reparsing. Correct invalid source upstream
+and retry the normal workflow; do not edit generated clones to mask errors.
+Previously indexed replacement-decoded content is not automatically rebuilt;
+use coordinated full-symbol/publication workflows when reconciliation is needed.
+
+210 offline tests pass, including Latin-1 symbols, BOM/second-line cookies,
+unknown/conflicting/invalid bytes, sync retry and full rollback. Live CPU/one-thread
+evaluation validated 25 cases and reproduced all baseline metrics, hybrid
+Recall@10 .880 / MRR .499. The live corpus was not rebuilt, so this does not prove
+quality after re-decoding existing source. No live data/cache/settings/process
+changes or performance claim; publication and ranking remain unchanged.
