@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math
+from collections.abc import Mapping
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -445,7 +446,18 @@ def delete_paths_from_elasticsearch(
         conflicts="proceed",
         refresh=True,
     )
-    if response.get("timed_out") or response.get("failures") or response.get("version_conflicts"):
+    total = response.get("total") if isinstance(response, Mapping) else None
+    deleted = response.get("deleted") if isinstance(response, Mapping) else None
+    conflicts = response.get("version_conflicts") if isinstance(response, Mapping) else None
+    failures = response.get("failures") if isinstance(response, Mapping) else None
+    if (
+        not isinstance(response, Mapping)
+        or response.get("timed_out") is not False
+        or type(total) is not int or total < 0
+        or type(deleted) is not int or deleted < 0 or deleted != total
+        or type(conflicts) is not int or conflicts != 0
+        or not isinstance(failures, list) or failures
+    ):
         raise RuntimeError("Elasticsearch path deletion was incomplete; retry synchronization.")
 
 

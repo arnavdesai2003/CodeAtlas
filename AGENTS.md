@@ -1236,3 +1236,13 @@ unconfigured environment policy and sanitized runtime responses. See api-access.
 exclusions and secret absence, alongside existing runtime auth/bypass checks.
 No retrieval/ranking change; previous evaluation remains applicable. Settings and
 running APIs unchanged; existing servers need restart for the new schema.
+
+## Latest milestone: strict incremental delete response validation (2026-10-02)
+
+Incremental Delete By Query now requires explicit non-timeout completion, an empty
+failure list, zero integer version conflicts, and matching nonnegative integer
+total/deleted counts. Missing/malformed/partial responses raise before cache
+invalidation/checkpoint finalization; committed sync jobs remain replayable. Retry
+repeats idempotent path deletion and stored-ID indexing. No cross-store atomicity
+claim. Updated the existing successful-response fixture to match ES response
+shape. No tests were run or added for this change, per current agent instruction.

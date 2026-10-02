@@ -167,3 +167,11 @@ failure counts raise before strict cache invalidation and checkpoint advancement
 The committed sync journal and symbol IDs remain replayable. A retry repeats the
 recorded publication work and validates refresh again; no reparse is required.
 This closes a previously unchecked refresh response, not cross-store atomicity.
+
+Incremental path deletion now requires a complete Delete By Query response:
+explicit `timed_out=false`, empty failure list, integer zero version conflicts,
+and matching nonnegative integer `total` and `deleted` counts. Missing or
+malformed fields fail closed and leave the committed sync journal/checkpoint
+retryable. Retrying repeats the idempotent path deletion before reindexing the
+same committed symbol IDs. This validates response completeness; it does not
+provide cross-store atomicity.

@@ -442,7 +442,8 @@ class RetrievalTests(unittest.TestCase):
     def test_successful_path_deletion(self):
         with patch.object(engine, "create_symbol_index"), patch.object(engine, "elasticsearch_client") as es:
             es.options.return_value.delete_by_query.return_value = {
-                "timed_out": False, "failures": [], "version_conflicts": 0,
+                "timed_out": False, "total": 0, "deleted": 0,
+                "failures": [], "version_conflicts": 0,
             }
             engine.delete_paths_from_elasticsearch(1, ["a.py"])
             es.options.return_value.delete_by_query.assert_called_once()
