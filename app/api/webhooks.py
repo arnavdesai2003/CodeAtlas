@@ -27,7 +27,8 @@ def verify_github_signature(
     payload: bytes,
     signature: str | None,
 ) -> None:
-    if not settings.github_webhook_secret:
+    secret = settings.github_webhook_secret.get_secret_value()
+    if not secret:
         raise HTTPException(status_code=503, detail="GitHub webhook is not configured.")
     if not signature:
         raise HTTPException(
@@ -38,7 +39,7 @@ def verify_github_signature(
     expected_signature = (
         "sha256="
         + hmac.new(
-            settings.github_webhook_secret.encode(),
+            secret.encode(),
             payload,
             hashlib.sha256,
         ).hexdigest()

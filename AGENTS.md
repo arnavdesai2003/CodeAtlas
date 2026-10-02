@@ -965,3 +965,16 @@ errors()/JSON not scrubbed. See docs/settings-validation.md.
 formatted-error tests. Existing local load confirmed .60/300 without secrets.
 No .env/data/cache/process changes, no quality/performance claim; measurements
 inherited. No weight tuning; changed valid weights still require evaluation.
+
+## Latest milestone: settings secret representation hygiene (2026-10-02)
+
+Webhook secret now SecretStr like API_KEY; signature consumer explicitly unwraps
+for HMAC. Empty-secret fail-closed behavior unchanged. DB/ES/Redis URLs stay plain
+client strings but repr=False excludes from Settings str/repr. Webhook secret
+JSON masks, raw model_dump/JSON service URLs remain sensitive; not encryption or
+general scrubber. See docs/settings-validation.md. Restart settings+consumer
+together to load types; direct key consumers use get_secret_value().
+
+228 offline tests pass with representation/key JSON/type checks and existing
+webhook signatures/unconfigured rejection. No actual secrets printed, .env/live
+delivery/data/cache/settings/process changes. Quality/performance inherited.

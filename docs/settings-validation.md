@@ -19,3 +19,23 @@ positive TTL, invalid/non-finite values, environment loading and formatted error
 redaction. Normal local settings load confirmed 0.60/300 without printing secrets.
 No live data/cache/settings/process changes; quality/performance checks inherited.
 Different valid weights require ordinary quality evaluation before deployment.
+
+## Secret representations (2026-10-02)
+
+GITHUB_WEBHOOK_SECRET now uses SecretStr, like API_KEY. Default string/repr and
+JSON serialization redact its value; HMAC verification explicitly retrieves it
+only for computing the signature. Empty-secret rejection and environment setup
+remain unchanged. Direct Python callers must use get_secret_value() when they
+need the webhook key; this is not encrypted storage.
+
+Database/Elasticsearch/Redis URL fields remain ordinary client-compatible strings
+but are omitted from Settings string/repr, since URLs can contain credentials.
+Programmatic model_dump()/JSON still contain those URL strings; do not log whole
+configuration mappings. Input error structures and arbitrary logs are not globally
+scrubbed. Environment/.env contents are unchanged and must still be protected.
+
+228 offline tests pass, covering URL/key representation omission/redaction,
+explicit secret access, JSON webhook-key masking and all existing signature/
+unconfigured webhook checks. No real secrets printed, live deliveries, data/cache,
+settings or process changes. Retrieval/performance checks remain inherited.
+Restart to load the new settings types and matching webhook consumer code.

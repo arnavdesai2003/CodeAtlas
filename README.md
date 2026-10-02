@@ -123,6 +123,8 @@ keep normal connection reuse.
 
 Numeric settings validate at startup: semantic weight must be finite in [0, 1]
 and cache TTL must be positive. See [settings validation](docs/settings-validation.md).
+Settings string/repr redact keys and omit service URLs; raw configuration mappings
+still require careful handling.
 
 Outside development/test, configure `API_KEY` and send `X-CodeAtlas-API-Key` on
 search/repository requests. A configured key is enforced in local modes too;

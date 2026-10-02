@@ -7,13 +7,13 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_key: SecretStr = SecretStr("")
 
-    database_url: str
-    elasticsearch_url: str
+    database_url: str = Field(repr=False)
+    elasticsearch_url: str = Field(repr=False)
     elasticsearch_close_search_connections: bool = False
-    redis_url: str
+    redis_url: str = Field(repr=False)
 
     search_cache_ttl: int = Field(default=300, ge=1)
-    github_webhook_secret: str = ""
+    github_webhook_secret: SecretStr = SecretStr("")
     hybrid_semantic_weight: float = Field(default=0.60, ge=0, le=1, allow_inf_nan=False)
     benchmark_cache_bypass_enabled: bool = False
     embedding_device: str | None = None

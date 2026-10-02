@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
 from app.api import webhooks
 from app.api.body_limit import RequestBodyLimit
@@ -20,7 +21,7 @@ class WebhookTests(unittest.TestCase):
         app.add_middleware(RequestBodyLimit, max_bytes=1024)
         self.client = TestClient(app)
         self.addCleanup(self.client.close)
-        secret = patch.object(webhooks.settings, "github_webhook_secret", "test-secret")
+        secret = patch.object(webhooks.settings, "github_webhook_secret", SecretStr("test-secret"))
         secret.start()
         self.addCleanup(secret.stop)
         session = patch.object(webhooks, "SessionLocal")
@@ -52,7 +53,7 @@ class WebhookTests(unittest.TestCase):
         self.assert_no_work()
 
     def test_unconfigured_rejects_empty_secret_forgery(self):
-        with patch.object(webhooks.settings, "github_webhook_secret", ""):
+        with patch.object(webhooks.settings, "github_webhook_secret", SecretStr("")):
             response = self.send(secret="")
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {"detail": "GitHub webhook is not configured."})

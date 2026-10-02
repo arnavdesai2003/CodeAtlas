@@ -8,6 +8,22 @@ from app.core.config import Settings
 
 
 class SettingsValidationTests(unittest.TestCase):
+    def test_settings_representations_redact_secrets_and_omit_service_urls(self):
+        with patch.dict(os.environ, {}, clear=True):
+            settings = Settings(_env_file=None,
+                database_url="postgresql://user:database-private@test.invalid/db",
+                elasticsearch_url="http://user:search-private@test.invalid",
+                redis_url="redis://:cache-private@test.invalid",
+                api_key="api-private", github_webhook_secret="webhook-private")
+        for representation in (str(settings), repr(settings)):
+            for secret in ("database-private", "search-private", "cache-private", "api-private", "webhook-private"):
+                self.assertNotIn(secret, representation)
+            self.assertNotIn("database_url=", representation)
+        self.assertNotIn("webhook-private", str(settings.model_dump()["github_webhook_secret"]))
+        self.assertNotIn("webhook-private", settings.model_dump_json())
+        self.assertEqual(settings.github_webhook_secret.get_secret_value(), "webhook-private")
+        self.assertIsInstance(settings.database_url, str)
+
     def create(self, **values):
         return Settings(_env_file=None, database_url="postgresql://test.invalid/db",
                         elasticsearch_url="http://test.invalid:9200",
