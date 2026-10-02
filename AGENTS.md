@@ -1163,3 +1163,18 @@ coverage. Live CPU/one-thread evaluation: 25 valid cases, all baseline metrics
 reproduced, hybrid Recall@10 .880 / MRR .499 and reranked .800 / .493. No live
 corpus/cache/settings/API process changes, measured cold-start incident or new
 performance claim.
+
+## Latest milestone: pruned, failure-aware discovery (2026-10-02)
+
+Source discovery uses a top-down walker that prunes `.git` before descent and
+does not follow linked directories. Existing regular-source checks/extensions/
+hashes remain; linked roots yield no files. Directory scan errors now propagate
+instead of silently committing a partial inventory. Ingestion rollback/cleanup
+coverage verifies no repository/file commit after discovery failure. Existing
+ambiguous-commit preservation and filesystem-race limits remain. See source-paths.
+
+264 offline tests pass. Read-only old/new discovery comparison across six clones:
+223 source-file paths, languages and hashes identical. Live CPU/one-thread
+evaluation: 25 valid cases, all baseline metrics reproduced, hybrid Recall@10
+.880 / MRR .499. No live ingestion/rebuild/cache/settings/API changes or new
+performance claim; iteration order is not guaranteed.

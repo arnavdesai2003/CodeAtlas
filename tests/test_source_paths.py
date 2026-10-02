@@ -2,6 +2,8 @@
 from pathlib import Path
 import tempfile
 import unittest
+import os
+from unittest.mock import patch
 
 from app.indexer.paths import regular_source_path, clone_directory
 from app.indexer.errors import UnsafeClonePath
@@ -9,6 +11,39 @@ from app.indexer.repository import discover_source_files
 
 
 class SourcePathTests(unittest.TestCase):
+    def test_discovery_prunes_git_directories_before_scanning(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".git" / "objects").mkdir(parents=True)
+            (root / ".git" / "objects" / "hidden.py").write_text("hidden")
+            (root / "src" / ".git").mkdir(parents=True)
+            (root / "src" / "visible.py").write_text("visible")
+            visited = []
+            scandir = os.scandir
+
+            def observe(path):
+                visited.append(Path(path))
+                return scandir(path)
+
+            with patch("os.scandir", side_effect=observe):
+                files = discover_source_files(root)
+            self.assertEqual([file["path"] for file in files], ["src/visible.py"])
+            self.assertTrue(all(".git" not in path.relative_to(root).parts for path in visited))
+
+    def test_directory_scan_failure_is_not_silently_ignored(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "blocked").mkdir()
+            scandir = os.scandir
+
+            def fail(path):
+                if Path(path).name == "blocked":
+                    raise PermissionError("scan denied")
+                return scandir(path)
+
+            with patch("os.scandir", side_effect=fail), self.assertRaises(PermissionError):
+                discover_source_files(root)
+
     def test_clone_components_reject_links_and_regular_files(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

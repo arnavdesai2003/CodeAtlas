@@ -98,25 +98,29 @@ def calculate_file_hash(path: Path) -> str:
 def discover_source_files(repository_path: Path) -> list[dict]:
     discovered_files = []
 
-    for path in repository_path.rglob("*"):
-        relative_path = path.relative_to(repository_path)
-        if regular_source_path(repository_path, relative_path.as_posix()) is None:
-            continue
+    if repository_path.is_symlink():
+        return discovered_files
 
-        extension = path.suffix.lower()
+    def scan_failed(error: OSError) -> None:
+        raise error
 
-        language = LANGUAGE_BY_EXTENSION.get(extension)
-
-        if language is None:
-            continue
-
-        discovered_files.append(
-            {
+    for directory, subdirectories, filenames in repository_path.walk(on_error=scan_failed):
+        # Prune before descent rather than scanning excluded Git internals.
+        subdirectories[:] = [name for name in subdirectories if name != ".git"]
+        for filename in filenames:
+            path = directory / filename
+            relative_path = path.relative_to(repository_path)
+            if regular_source_path(repository_path, relative_path.as_posix()) is None:
+                continue
+            extension = path.suffix.lower()
+            language = LANGUAGE_BY_EXTENSION.get(extension)
+            if language is None:
+                continue
+            discovered_files.append({
                 "path": relative_path.as_posix(),
                 "language": language,
                 "content_hash": calculate_file_hash(path),
-            }
-        )
+            })
 
     return discovered_files
 

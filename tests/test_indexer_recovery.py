@@ -29,6 +29,19 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_discovery_error_aborts_ingestion_without_committing_or_preserving_clone(self):
+        destination = self.root / "owner" / "scan-failed"
+        with patch.object(repository, "git_output"), \
+             patch.object(repository, "get_current_commit", return_value="initial"), \
+             patch.object(repository, "get_current_branch", return_value="main"), \
+             patch.object(repository, "discover_source_files", side_effect=PermissionError("scan denied")):
+            with self.assertRaises(PermissionError):
+                repository.ingest_repository(self.db, "https://github.com/owner/scan-failed")
+        self.assertFalse(destination.exists())
+        with self.sessions() as verify:
+            self.assertEqual(verify.query(Repository).count(), 1)
+            self.assertEqual(verify.query(CodeFile).count(), 1)
+
     def test_invalid_index_vectors_block_bulk_and_keep_sync_replayable(self):
         self.index.side_effect = lambda **kwargs: search_engine.index_files_in_elasticsearch(**kwargs)
         with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \

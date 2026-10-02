@@ -131,3 +131,23 @@ recovery tests still pass. Live CPU/one-thread evaluation reproduced every metri
 on 25 valid cases, hybrid Recall@10 .880 / MRR .499, without rebuilding the live
 index. No live data/cache/settings/process changes. Per-call construction adds
 allocation; no ingestion latency/throughput improvement is claimed or measured.
+
+## Directory traversal during ingestion
+
+Discovery now prunes `.git` directories before descent instead of scanning and
+rejecting their entries afterward. The walker does not follow directory symlinks;
+individual files still pass the existing regular-source selection check. A linked
+clone root yields no source files. Source extensions and content hashing are
+unchanged; filesystem iteration order is not an API guarantee.
+
+Directory scan errors propagate rather than silently producing a partial file
+inventory. Ingestion rolls back and removes its reserved, uncommitted clone when
+discovery fails; it does not commit an incomplete repository snapshot. Existing
+ambiguous-commit preservation remains unchanged. This is not a race-free file
+opening scheme, and concurrently modified clone contents remain unsupported.
+
+Offline tests verify excluded Git directories are never scanned, injected scan
+errors propagate and failed discovery commits no repository/files. Read-only
+old/new comparison on 2026-10-02 found identical paths, languages and hashes for
+223 source files across six clones. Existing-index retrieval metrics also
+matched baseline. No ingestion throughput gain was measured.
