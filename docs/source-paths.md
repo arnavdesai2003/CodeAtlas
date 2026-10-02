@@ -54,3 +54,20 @@ all three levels reject links/files, and API responses exclude private paths.
 Ancestors above the configured root are trusted; operators must inspect them.
 The check does not provide race-free directory handles or protection against a
 hostile local writer replacing components after validation.
+
+## Real Git type-change recovery
+
+203 offline tests pass. A new real local Git fixture commits regular-file →
+symlink → regular-file transitions. Git refs/diff/reset execute normally; network
+fetch and Elasticsearch/Redis are mocked, with temporary SQLite metadata. The
+first sync resets to a link, removes old metadata/symbols and records the exact
+path. Injected deletion failure leaves the old checkpoint and pending job; retry
+resumes publication. A subsequent regular-file transition is indexed again, and
+the external symlink target remains unchanged. Temporary repos/data are removed.
+
+Existing metadata refreshed by Git's `T` status now contributes to files_modified,
+as `M` already did. A previously excluded link becoming an indexed regular file
+still counts as files_added; a regular file becoming excluded counts as deleted.
+This fixes reporting only. Selection, journal/checkpoint rules, ranking and live
+data remain unchanged. No new live quality or performance measurement was taken;
+the preceding evaluation is inherited.

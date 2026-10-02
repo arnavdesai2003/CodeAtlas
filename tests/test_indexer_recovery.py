@@ -29,6 +29,60 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_real_git_type_changes_and_publication_recovery(self):
+        from app.indexer.git import git_output, repository_git_output
+        git_output("init", str(self.path))
+
+        def commit():
+            repository_git_output(self.path, "add", "--", "sample.py")
+            repository_git_output(self.path, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                                  "-c", "core.hooksPath=/dev/null", "commit", "-m", "fixture")
+            return repository_git_output(self.path, "rev-parse", "HEAD")
+
+        old = commit()
+        self.repo.last_indexed_commit = old
+        self.db.commit()
+        outside = self.root / "private.py"
+        outside.write_text("def private(): pass\n")
+        (self.path / "sample.py").unlink()
+        (self.path / "sample.py").symlink_to(outside)
+        target = commit()
+        repository_git_output(self.path, "update-ref", "refs/remotes/origin/main", target)
+        repository_git_output(self.path, "reset", "--hard", old)
+
+        def real_git(path, *args):
+            # Only network fetch is replaced. Diff/ref/reset operate on real Git.
+            return "" if args[0] == "fetch" else repository_git_output(path, *args)
+
+        self.git.side_effect = real_git
+        self.delete.side_effect = RuntimeError("ES unavailable")
+        with self.assertRaises(RuntimeError):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.assertTrue((self.path / "sample.py").is_symlink())
+        self.assertEqual(self.db.query(CodeSymbol).count(), 0)
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, old)
+        job = self.db.get(RepositorySyncJob, self.repo_id)
+        self.assertEqual(job.affected_paths, ["sample.py"])
+        self.delete.side_effect = None
+        self.assertTrue(incremental.sync_repository(self.db, self.repo_id)["resumed"])
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, target)
+
+        (self.path / "sample.py").unlink()
+        (self.path / "sample.py").write_text("def restored(): pass\n")
+        restored = commit()
+        repository_git_output(self.path, "update-ref", "refs/remotes/origin/main", restored)
+        result = incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(result["files_added"], 1)
+        self.assertEqual(self.db.query(CodeSymbol).one().name, "restored")
+        self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, restored)
+        self.assertEqual(outside.read_text(), "def private(): pass\n")
+
+    def test_type_change_with_existing_metadata_counts_as_modified(self):
+        self.diff = "T\0sample.py\0"
+        result = incremental.sync_repository(self.db, self.repo_id)
+        self.assertEqual(result["files_modified"], 1)
+        self.assertEqual(result["files_added"], 0)
+
     def test_unusual_diff_path_is_journaled_and_indexed_exactly(self):
         name = "tab\tline\n.py"
         (self.path / name).write_text("def unusual(): pass\n")

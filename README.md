@@ -91,6 +91,8 @@ query/fragment suffixes and escaped/ambiguous paths are rejected. The same
 Discovery and symbol indexing exclude source symlinks; sync removes stale symbols
 when affected regular files become links. See [source selection](docs/source-paths.md)
 for recovery behavior and filesystem limits.
+Type changes are covered by real local Git recovery tests, including failed
+publication and restoration from a symlink to a regular source file.
 Clone-root, owner and clone directory components also reject symlinks/non-directories
 before ingestion, new Git sync or source reads; rejected paths require inspection.
 Git commands disable terminal input and use a configurable 120-second per-command

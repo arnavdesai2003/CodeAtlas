@@ -830,3 +830,18 @@ Live CPU/one-thread evaluation: 25 valid, all baselines reproduced, hybrid
 Recall@10 .880 / MRR .499. No live sync/reindex/data/cache/settings/process changes,
 no performance claim. Undecodable filename bytes fail instead of lossy decode;
 binary filename support remains separate.
+
+## Latest milestone: real Git type-change recovery (2026-10-01)
+
+Existing metadata updated by T status now counts files_modified alongside M;
+newly eligible regular files still count added, excluded replacements deleted.
+Selection/publication/ranking unchanged. New real local Git fixture covers
+commits/refs/NUL diff/reset through regular→symlink→regular lifecycle with
+temporary SQLite and mocked fetch/ES/Redis, including deletion-failure journal
+retention, old checkpoint, resumed publication, restored symbols and intact
+external target. See docs/source-paths.md.
+
+203 offline tests pass. Temporary artifacts removed; no live sync/clone/data/
+cache/settings/process changes. Quality evaluation inherited from preceding
+diff milestone; no new quality/performance claim. This proves local Git lifecycle
+with mocked external stores, not live cross-store atomicity or network recovery.

@@ -322,7 +322,7 @@ def _sync_repository(
                     files_added += 1
 
             else:
-                if status == "M":
+                if status in {"M", "T"}:
                     files_modified += 1
 
             code_file.language = language
