@@ -92,3 +92,18 @@ the default `/search` path still does not invoke reranking. Offline tests cover
 bad batches/scores, healthy retry, stable ordering and sanitized responses. Live
 25-case evaluation reproduced all metrics, including reranked Recall@10 .800 /
 MRR .493. No malformed live cross-encoder output was observed.
+
+## Optional reranker cold initialization
+
+A process-local lock now serializes cached cross-encoder initialization, matching
+the embedding loader's approach. Concurrent cold requests share one constructed
+model; an initialization exception releases the lock and is not cached, allowing
+later calls to retry. The lock ends before `predict`, so inference remains
+concurrent. Each worker process still loads its own model; this is not a global
+model pool or inference thread-safety guarantee.
+
+Offline event/barrier tests cover six cold callers, failed initialization retry
+and overlapping predictions without loading real models. Real 25-case evaluation
+reproduced reranked metrics. No concurrent production cold-start incident or
+throughput improvement was measured. Default API reranking stays disabled, and
+model/device/thread settings are unchanged.

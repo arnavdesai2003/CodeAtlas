@@ -1148,3 +1148,18 @@ See search-failures documentation. No model/ranking policy changes.
 baseline reproduced, including reranked Recall@10 .800 / MRR .493 and hybrid
 Recall@10 .880 / MRR .499. No invalid live model output observed, no corpus/cache/
 settings/API process changes and no performance claim.
+
+## Latest milestone: serialized reranker cold initialization (2026-10-02)
+
+Optional cross-encoder cached construction is now protected by a process-local
+initialization lock, matching embeddings. Six cold callers share one model;
+failed construction releases the lock and can retry. Prediction remains outside
+the lock and concurrent. No global model pool or inference thread-safety claim;
+each worker still loads separately. Model/device/thread settings and default
+non-reranked API behavior remain unchanged. See search-failures documentation.
+
+261 offline tests pass, with event/barrier initialization/failure/prediction
+coverage. Live CPU/one-thread evaluation: 25 valid cases, all baseline metrics
+reproduced, hybrid Recall@10 .880 / MRR .499 and reranked .800 / .493. No live
+corpus/cache/settings/API process changes, measured cold-start incident or new
+performance claim.

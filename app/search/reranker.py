@@ -1,6 +1,7 @@
 from functools import lru_cache
 import math
 from numbers import Real
+from threading import Lock
 
 from sentence_transformers import CrossEncoder
 from app.search.errors import InvalidRerankerOutputError
@@ -9,13 +10,21 @@ from app.search.errors import InvalidRerankerOutputError
 RERANKER_MODEL = (
     "cross-encoder/ms-marco-MiniLM-L-6-v2"
 )
+_model_init_lock = Lock()
 
 
 @lru_cache(maxsize=1)
-def get_reranker() -> CrossEncoder:
+def _load_reranker() -> CrossEncoder:
     return CrossEncoder(
         RERANKER_MODEL
     )
+
+
+def get_reranker() -> CrossEncoder:
+    # lru_cache permits duplicate construction on concurrent cold misses.
+    # The lock covers initialization only; prediction remains concurrent.
+    with _model_init_lock:
+        return _load_reranker()
 
 
 def build_rerank_document(

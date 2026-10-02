@@ -1,5 +1,7 @@
 """Deterministic model-output validation without loading a cross-encoder."""
 import copy
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Event, Lock
 import unittest
 from unittest.mock import Mock, patch
 
@@ -15,6 +17,60 @@ def candidates():
 
 
 class RerankerTests(unittest.TestCase):
+    def test_concurrent_cold_requests_construct_one_shared_model(self):
+        reranker._load_reranker.cache_clear()
+        self.addCleanup(reranker._load_reranker.cache_clear)
+        ready = Event()
+        lock = Lock()
+        attempts = 0
+        model = Mock()
+
+        def construct(*args):
+            self.assertTrue(ready.wait(timeout=5))
+            return model
+
+        def request(_):
+            nonlocal attempts
+            with lock:
+                attempts += 1
+                if attempts == 6:
+                    ready.set()
+            return reranker.get_reranker()
+
+        with patch.object(reranker, "CrossEncoder", side_effect=construct) as constructor, \
+             ThreadPoolExecutor(max_workers=6) as executor:
+            models = list(executor.map(request, range(6)))
+        constructor.assert_called_once_with(reranker.RERANKER_MODEL)
+        self.assertTrue(all(result is model for result in models))
+
+    def test_failed_initialization_is_not_cached_or_left_locked(self):
+        reranker._load_reranker.cache_clear()
+        self.addCleanup(reranker._load_reranker.cache_clear)
+        model = Mock()
+        with patch.object(reranker, "CrossEncoder", side_effect=[RuntimeError("load failed"), model]) as constructor:
+            with self.assertRaises(RuntimeError):
+                reranker.get_reranker()
+            self.assertIs(reranker.get_reranker(), model)
+            self.assertIs(reranker.get_reranker(), model)
+        self.assertEqual(constructor.call_count, 2)
+
+    def test_prediction_remains_concurrent_after_initialization(self):
+        reranker._load_reranker.cache_clear()
+        self.addCleanup(reranker._load_reranker.cache_clear)
+        gate = Barrier(2)
+        model = Mock()
+
+        def predict(pairs, **kwargs):
+            gate.wait(timeout=5)
+            return [0.5] * len(pairs)
+
+        model.predict.side_effect = predict
+        with patch.object(reranker, "CrossEncoder", return_value=model) as constructor, \
+             ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(lambda _: reranker.rerank_results("q", candidates(), 3), range(2)))
+        constructor.assert_called_once()
+        self.assertEqual([len(result) for result in outcomes], [3, 3])
+
     def test_valid_numpy_scores_preserve_tie_order_and_original_candidates(self):
         results = candidates()
         original = copy.deepcopy(results)
