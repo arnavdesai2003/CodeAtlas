@@ -9,12 +9,25 @@ from app.indexer import git
 
 
 class GitRunnerTests(unittest.TestCase):
-    def test_real_nul_diff_preserves_tab_and_newline_filename(self):
+    def test_invalid_output_encoding_fails_without_replacing_filename_bytes(self):
+        with patch.object(git.subprocess, "run", return_value=Mock(stdout=b"M\0bad\xff.py\0")):
+            with self.assertRaises(UnicodeDecodeError):
+                git.git_output("diff", "--name-status", "-z")
+
+    def test_failed_git_retains_textual_diagnostics(self):
+        error = subprocess.CalledProcessError(1, ["git"], output=b"out\r\n", stderr=b"failed\xff")
+        with patch.object(git.subprocess, "run", side_effect=error):
+            with self.assertRaises(subprocess.CalledProcessError) as caught:
+                git.git_output("clone")
+        self.assertEqual(caught.exception.output, "out\r\n")
+        self.assertEqual(caught.exception.stderr, "failed\ufffd")
+
+    def test_real_nul_diff_preserves_tab_newline_and_carriage_return_filename(self):
         from app.indexer.incremental import parse_git_diff
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             git.git_output("init", str(root))
-            name = "tab\tline\n.py"
+            name = "tab\tline\ncarriage\rpair\r\n.py"
             (root / name).write_text("first")
             git.repository_git_output(root, "add", "--", name)
             git.repository_git_output(root, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
@@ -51,7 +64,7 @@ class GitRunnerTests(unittest.TestCase):
         overrides = {name: "redirected" for name in git.REPOSITORY_ENVIRONMENT}
         overrides["GIT_ASKPASS"] = "trusted-helper"
         with patch.dict(git.os.environ, overrides), \
-             patch.object(git.subprocess, "run", return_value=Mock(stdout="")) as run:
+             patch.object(git.subprocess, "run", return_value=Mock(stdout=b"")) as run:
             git.git_output("--version")
             child = run.call_args.kwargs["env"]
             self.assertTrue(git.REPOSITORY_ENVIRONMENT.isdisjoint(child))
@@ -77,12 +90,13 @@ class GitRunnerTests(unittest.TestCase):
     def test_runner_is_bounded_noninteractive_and_preserves_environment(self):
         with patch.dict(git.os.environ, {"GIT_TERMINAL_PROMPT": "1", "CODEATLAS_TEST": "keep"}), \
              patch.object(git.settings, "git_timeout_seconds", 7), \
-             patch.object(git.subprocess, "run", return_value=Mock(stdout=" commit\n")) as run:
+             patch.object(git.subprocess, "run", return_value=Mock(stdout=b" commit\n")) as run:
             self.assertEqual(git.git_output("-C", "clone path", "rev-parse", "HEAD"), "commit")
             kwargs = run.call_args.kwargs
             self.assertEqual(run.call_args.args[0], ["git", "-C", "clone path", "rev-parse", "HEAD"])
             self.assertEqual(kwargs["timeout"], 7)
             self.assertEqual(kwargs["stdin"], subprocess.DEVNULL)
+            self.assertFalse(kwargs["text"])
             self.assertEqual(kwargs["env"]["GIT_TERMINAL_PROMPT"], "0")
             self.assertEqual(kwargs["env"]["CODEATLAS_TEST"], "keep")
             self.assertEqual(git.os.environ["GIT_TERMINAL_PROMPT"], "1")

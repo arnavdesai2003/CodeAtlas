@@ -95,3 +95,16 @@ renames/copies and preserved whitespace. CPU/one-thread live evaluation validate
 No live sync, reindex, corpus/cache/settings/process changes or performance claim.
 Git stdout remains text-decoded; filenames that cannot be decoded fail safely
 rather than receiving a lossy replacement. Binary filename support is separate.
+
+Git stdout is captured as bytes and decoded strictly as UTF-8 without universal
+newline conversion. This preserves carriage returns and CRLF sequences inside
+NUL-delimited filenames, alongside tabs and newlines. Previously, subprocess text
+mode converted these bytes and sync could treat an existing source as missing.
+Invalid UTF-8 output fails before diff-driven reset or metadata mutation rather
+than substituting another path. Failed-command diagnostics remain text, with
+replacement decoding allowed for diagnostics only; API error messages remain
+sanitized. Timeout behavior is unchanged.
+
+A real temporary Git rename test covers CR/CRLF paths through diff, reset,
+metadata/journal preparation, injected publication failure and recovery. The
+runner regression failed before the fix and passes afterward.

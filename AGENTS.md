@@ -1034,3 +1034,16 @@ quiescence, reviewed plans and maintenance locks remain unchanged. See
 
 238 offline tests pass. No production changes, live deletion, policy/settings
 changes or new retrieval/performance measurements.
+
+## Latest milestone: byte-preserving Git filenames (2026-10-02)
+
+Fixed subprocess universal-newline conversion corrupting carriage returns and
+CRLF sequences in NUL-delimited Git filenames. Git runner captures bytes and
+decodes strict UTF-8 without newline rewriting; failed-command diagnostics retain
+text with replacement decoding only for diagnostics. Real Git regression was
+reproduced before the fix. Extended rename/recovery coverage preserves exact
+CR/CRLF paths through metadata, journals and retries. See `docs/git-execution.md`.
+
+240 offline tests pass. Live read-only CPU/one-thread evaluation reproduced all
+baseline metrics with 25 cases, hybrid Recall@10 .880 / MRR .499. No live corpus
+rebuild, cache/settings changes, API restart or new performance claim.

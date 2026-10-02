@@ -117,7 +117,7 @@ class IndexerRecoveryTests(unittest.TestCase):
         old = commit()
         self.repo.last_indexed_commit = old
         self.db.commit()
-        destination = "renamed\tline\n.py"
+        destination = "renamed\tline\ncarriage\rpair\r\n.py"
         (self.path / "sample.py").rename(self.path / destination)
         target = commit()
         repository_git_output(self.path, "update-ref", "refs/remotes/origin/main", target)
@@ -573,7 +573,7 @@ class IndexerRecoveryTests(unittest.TestCase):
             target = Path(args[-1])
             target.mkdir(parents=True, exist_ok=True)
             (target / "main.py").write_text("def run():\n    return 1\n")
-            return subprocess.CompletedProcess(args, 0, stdout="", stderr="")
+            return subprocess.CompletedProcess(args, 0, stdout=b"", stderr=b"")
 
         with patch.object(repository.subprocess, "run", side_effect=clone), \
              patch.object(repository, "get_current_commit", return_value="initial"), \

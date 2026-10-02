@@ -19,12 +19,22 @@ def git_output(*args: str) -> str:
     for name in REPOSITORY_ENVIRONMENT:
         environment.pop(name, None)
     environment["GIT_TERMINAL_PROMPT"] = "0"
-    result = subprocess.run(
-        ["git", *args], check=True, capture_output=True, text=True,
-        stdin=subprocess.DEVNULL, env=environment,
-        timeout=settings.git_timeout_seconds,
-    )
-    return result.stdout.strip()
+    try:
+        # Text mode's universal-newline conversion corrupts CR/CRLF bytes in
+        # NUL-delimited filenames. Decode explicitly without changing them.
+        result = subprocess.run(
+            ["git", *args], check=True, capture_output=True, text=False,
+            stdin=subprocess.DEVNULL, env=environment,
+            timeout=settings.git_timeout_seconds,
+        )
+    except subprocess.CalledProcessError as exc:
+        # Preserve the existing textual diagnostic contract for clone errors.
+        if isinstance(exc.output, bytes):
+            exc.output = exc.output.decode("utf-8", errors="replace")
+        if isinstance(exc.stderr, bytes):
+            exc.stderr = exc.stderr.decode("utf-8", errors="replace")
+        raise
+    return result.stdout.decode("utf-8").strip()
 
 
 def validate_git_metadata(repository_path: Path) -> None:
