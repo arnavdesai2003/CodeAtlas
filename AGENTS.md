@@ -993,3 +993,16 @@ unchanged. See `docs/source-audit.md`.
 Read-only live inspection: six repositories, 219 Python files, all clean.
 230 offline tests pass. No new retrieval or performance measurements; prior
 quality baseline remains applicable. Running APIs and settings were unchanged.
+
+## Latest milestone: ambiguous sync commit coverage (2026-10-02)
+
+Added fresh-session transaction tests for lost acknowledgements after successful
+sync preparation and final commits. Preparation loss preserves the pending
+target and symbol IDs; retry ignores advanced source/remote and replays without
+Git or parsing. Final loss leaves the checkpoint advanced and journal absent;
+unchanged-remote retry performs no repeated publication or invalidation. See
+`docs/sync-recovery.md` for operator interpretation of ambiguous errors.
+
+232 offline tests pass. No production changes were needed, no live stores or
+running processes changed, and no new retrieval/performance claims were made.
+SQLite tests exercise application recovery rather than PostgreSQL network loss.

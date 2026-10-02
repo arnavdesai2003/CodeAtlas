@@ -642,6 +642,68 @@ class IndexerRecoveryTests(unittest.TestCase):
         self.assertIsNotNone(self.db.get(RepositorySyncJob, self.repo_id))
         self.assertTrue(incremental.sync_repository(self.db, self.repo_id)["resumed"])
 
+    def test_lost_preparation_ack_replays_committed_snapshot_in_new_session(self):
+        commit = self.db.commit
+
+        def committed_but_lost():
+            commit()
+            raise RuntimeError("lost preparation acknowledgement")
+
+        with patch.object(self.db, "commit", side_effect=committed_but_lost):
+            with self.assertRaisesRegex(RuntimeError, "lost preparation"):
+                incremental.sync_repository(self.db, self.repo_id)
+        self.delete.assert_not_called()
+        self.index.assert_not_called()
+        self.invalidate.assert_not_called()
+        self.db.close()
+        self.remote = "newer"
+        (self.path / "sample.py").write_text("def newer_function():\n    pass\n")
+        with self.sessions() as retry:
+            job = retry.get(RepositorySyncJob, self.repo_id)
+            self.assertEqual(job.target_commit, "new")
+            self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "old")
+            committed_ids = [symbol.id for symbol in retry.query(CodeSymbol).all()]
+            self.assertEqual(retry.query(CodeSymbol).one().name, "new_function")
+            self.git.reset_mock()
+            with patch.object(incremental, "parse_python_source", side_effect=AssertionError("must not reparse")):
+                result = incremental.sync_repository(retry, self.repo_id)
+            self.git.assert_not_called()
+            self.assertTrue(result["resumed"])
+            self.assertEqual(result["new_commit"], "new")
+            self.assertEqual([symbol.id for symbol in retry.query(CodeSymbol).all()], committed_ids)
+            self.assertIsNone(retry.get(RepositorySyncJob, self.repo_id))
+            self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "new")
+        self.delete.assert_called_once_with(repository_id=self.repo_id, paths=["sample.py"])
+        self.invalidate.assert_called_once_with(strict=True)
+
+    def test_lost_final_ack_is_already_complete_in_new_session(self):
+        commit = self.db.commit
+        count = 0
+
+        def lose_final_ack():
+            nonlocal count
+            count += 1
+            commit()
+            if count == 2:
+                raise RuntimeError("lost final acknowledgement")
+
+        with patch.object(self.db, "commit", side_effect=lose_final_ack):
+            with self.assertRaisesRegex(RuntimeError, "lost final"):
+                incremental.sync_repository(self.db, self.repo_id)
+        self.db.close()
+        with self.sessions() as retry:
+            self.assertIsNone(retry.get(RepositorySyncJob, self.repo_id))
+            self.assertEqual(retry.get(Repository, self.repo_id).last_indexed_commit, "new")
+            committed_ids = [symbol.id for symbol in retry.query(CodeSymbol).all()]
+            with patch.object(incremental, "parse_python_source", side_effect=AssertionError("must not reparse")):
+                result = incremental.sync_repository(retry, self.repo_id)
+            self.assertFalse(result["changed"])
+            self.assertEqual(result["new_commit"], "new")
+            self.assertEqual([symbol.id for symbol in retry.query(CodeSymbol).all()], committed_ids)
+        self.delete.assert_called_once()
+        self.index.assert_called_once()
+        self.invalidate.assert_called_once_with(strict=True)
+
     def test_rename_delete_and_add_publish_correct_paths_and_symbols(self):
         self.diff = "R100\tsample.py\trenamed.py\nA\tadded.py"
         (self.path / "renamed.py").write_text("def renamed():\n    pass\n")

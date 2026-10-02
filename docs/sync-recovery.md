@@ -138,3 +138,23 @@ no refresh/cache invalidation, then successful replay with one strict invalidati
 Live CPU/one-thread evaluation validated 25 cases and reproduced every baseline
 metric, hybrid Recall@10 .880 / MRR .499. Live corpus was not synchronized or
 reindexed; no data/cache/settings/process changes or performance claim.
+
+### Lost commit acknowledgements
+
+An error response does not prove that a database commit failed. If the metadata
+preparation commit succeeds but its acknowledgement is lost, the pending sync
+job and replacement symbols remain durable. Retry in a fresh session resumes
+that recorded target using its existing symbol IDs, even if local source or the
+remote has since advanced. Publication did not start before the failed
+acknowledgement returned.
+
+If the final checkpoint/job-deletion commit succeeds but its acknowledgement is
+lost, a fresh retry sees the advanced checkpoint and no pending job. With an
+unchanged remote it reports `changed=false` without repeating publication or
+cache invalidation; a newer remote is handled as subsequent work. Never manually
+remove a journal or rewind the checkpoint merely because a caller saw an error.
+
+Offline transaction tests commit successfully before injecting acknowledgement
+loss at each boundary, then inspect and retry through a new SQLite session.
+These verify application recovery logic, not a simulated PostgreSQL network
+failure or distributed atomicity.
