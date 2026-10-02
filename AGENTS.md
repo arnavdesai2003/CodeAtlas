@@ -780,3 +780,19 @@ generated key in process env only, 80 successful searches with verified
 attribution/equality. Server stopped/private keys removed; legacy routing/UUID/
 4,340 docs unchanged. No .env/live cache generation/port 8000 changes, no new
 retrieval/capacity claim. Archived matched controls need compatible key policy.
+
+## Latest milestone: Git child repository environment isolation (2026-10-01)
+
+git_output removes inherited GIT_DIR/COMMON_DIR/WORK_TREE/INDEX_FILE,
+OBJECT_DIRECTORY/ALTERNATE_OBJECT_DIRECTORIES, NAMESPACE/PREFIX/GRAFT_FILE/
+SHALLOW_FILE/REPLACE_REF_BASE only from child environment. Parent variables,
+credential helpers/config and unrelated settings remain untouched; terminal
+prompt policy/timeout unchanged. See docs/git-execution.md for precise list/limits.
+
+192 offline tests pass. Mocked all-variable policy and real two-temporary-repository
+Git fixture confirm -C selects requested clone despite conflicting parent
+repository/worktree/index variables and creates no external index. Fixtures
+removed; no network/live clone/sync/data/cache/settings/process changes or new
+quality/performance claims. User/local/system/config injection remains outside
+this scoped isolation. Missing clone Git metadata/discovery remains next inspection
+priority; public authorization scopes/concurrency remain separate.

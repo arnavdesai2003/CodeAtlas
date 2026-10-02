@@ -4,7 +4,8 @@ Repository ingestion and synchronization use a shared `git_output` runner for
 clone, commit/branch inspection, fetch, reset and diff. Each command receives
 `GIT_TIMEOUT_SECONDS` (default 120; positive integer). Set it before starting the
 API/writer process when large or slow repositories need more time. The existing
-environment and Git configuration are preserved, except `GIT_TERMINAL_PROMPT=0`;
+environment and Git configuration are preserved except repository overrides
+listed below and `GIT_TERMINAL_PROMPT=0`;
 stdin is `/dev/null`. Arguments remain an argv list with no shell interpolation.
 
 Timeouts raise `subprocess.TimeoutExpired`. Ingestion rolls back and removes its
@@ -29,3 +30,23 @@ and sync metadata/checkpoint preservation. Existing recovery/lock tests still pa
 No live Git network operation, clone/sync, corpus/index/cache/schema or process
 changes were performed. `.env` stays unchanged; `.env.example` documents the new
 optional setting. Retrieval quality/performance measurements remain inherited.
+
+## Repository environment overrides
+
+The child runner drops `GIT_DIR`, `GIT_COMMON_DIR`, `GIT_WORK_TREE`,
+`GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`,
+`GIT_NAMESPACE`, `GIT_PREFIX`, `GIT_GRAFT_FILE`, `GIT_SHALLOW_FILE` and
+`GIT_REPLACE_REF_BASE`. These can select alternate repository state despite the
+directory passed to Git; see Git's [environment documentation](https://git-scm.com/docs/git/2.43.0)
+and [environment definitions](https://github.com/git/git/blob/master/environment.h).
+Only child environments change; parent variables stay intact. Credential helpers,
+user/system/local config and unrelated environment remain operator-controlled.
+This is not a complete Git sandbox or configuration override isolation.
+
+192 offline tests pass. Mocked checks cover all removed names and preservation
+of parent/helper settings. A real local Git fixture initializes two temporary
+repositories, sets conflicting parent git-dir/worktree/index overrides, and
+verifies rev-parse selects the requested repository and status creates no external
+index. Temporary fixtures are removed. No network/live clone/sync, corpus/cache,
+.env or running processes changed; previous quality metrics remain inherited.
+Git repository discovery when clone metadata is absent remains separate work.
