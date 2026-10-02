@@ -91,6 +91,8 @@ query/fragment suffixes and escaped/ambiguous paths are rejected. The same
 Discovery and symbol indexing exclude source symlinks; sync removes stale symbols
 when affected regular files become links. See [source selection](docs/source-paths.md)
 for recovery behavior and filesystem limits.
+Clone-root, owner and clone directory components also reject symlinks/non-directories
+before ingestion, new Git sync or source reads; rejected paths require inspection.
 
 ## Search
 

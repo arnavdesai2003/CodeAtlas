@@ -29,6 +29,34 @@ from elastic_transport import ApiResponseMeta, NodeConfig
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_redirected_clone_blocks_sync_and_full_before_reads(self):
+        redirected = self.root / "redirected"
+        self.path.rename(redirected)
+        self.path.symlink_to(redirected, target_is_directory=True)
+        from app.indexer.errors import UnsafeClonePath
+        with self.assertRaises(UnsafeClonePath):
+            incremental.sync_repository(self.db, self.repo_id)
+        self.git.assert_not_called()
+        with patch("app.indexer.symbols.REPOSITORY_ROOT", self.root), \
+             patch("app.indexer.symbols.parse_python_source") as parse:
+            with self.assertRaises(UnsafeClonePath):
+                index_repository_symbols(self.db, self.repo_id)
+        parse.assert_not_called()
+        self.assertEqual(self.db.query(CodeSymbol).count(), 1)
+
+    def test_redirected_owner_blocks_ingestion_without_git_or_cleanup(self):
+        from app.indexer.errors import UnsafeClonePath
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "keep.txt").write_text("keep")
+        (self.root / "redirect").symlink_to(outside, target_is_directory=True)
+        with patch.object(repository.subprocess, "run") as git:
+            with self.assertRaises(UnsafeClonePath):
+                repository.ingest_repository(self.db, "https://github.com/redirect/new.git")
+        git.assert_not_called()
+        self.assertEqual((outside / "keep.txt").read_text(), "keep")
+        self.assertFalse((outside / "new").exists())
+
     def test_sync_regular_file_to_symlink_removes_stale_metadata_and_symbols(self):
         outside = self.root / "private.py"
         outside.write_text("def secret(): pass\n")

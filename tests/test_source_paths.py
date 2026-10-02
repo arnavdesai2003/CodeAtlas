@@ -3,11 +3,30 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from app.indexer.paths import regular_source_path
+from app.indexer.paths import regular_source_path, clone_directory
+from app.indexer.errors import UnsafeClonePath
 from app.indexer.repository import discover_source_files
 
 
 class SourcePathTests(unittest.TestCase):
+    def test_clone_components_reject_links_and_regular_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            target = base / "outside"
+            target.mkdir()
+            for level in (0, 1, 2):
+                for kind in ("link", "dangling", "file"):
+                    root = base / f"root-{level}-{kind}"
+                    candidate = (root, root / "owner", root / "owner/repo")[level]
+                    candidate.parent.mkdir(parents=True, exist_ok=True)
+                    if kind == "file":
+                        candidate.write_text("occupied")
+                    else:
+                        candidate.symlink_to(target if kind == "link" else base / "missing")
+                    with self.subTest(level=level, kind=kind), self.assertRaises(UnsafeClonePath):
+                        clone_directory(root, "owner", "repo")
+            self.assertEqual(clone_directory(base / "new", "owner", "repo"), base / "new/owner/repo")
+
     def test_discovery_excludes_file_directory_and_dangling_links(self):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

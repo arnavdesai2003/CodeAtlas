@@ -21,7 +21,7 @@ from app.db.database import engine, get_db
 from app.indexer.repository import ingest_repository
 from app.indexer.errors import (
     InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed,
-    RepositoryNotFound, RepositoryCloneMissing,
+    RepositoryNotFound, RepositoryCloneMissing, UnsafeClonePath,
 )
 from app.db.models import Repository
 from app.indexer.incremental import sync_repository, RepositorySyncInProgress
@@ -132,6 +132,8 @@ def add_repository(
         raise HTTPException(status_code=409, detail="Repository already registered or clone directory occupied.") from exc
     except RepositoryCloneFailed as exc:
         raise HTTPException(status_code=502, detail="Repository clone failed.") from exc
+    except UnsafeClonePath as exc:
+        raise HTTPException(status_code=409, detail="Repository directory is unsafe; inspect local state.") from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Repository creation failed; inspect state before retrying.") from exc
 
@@ -231,6 +233,9 @@ def synchronize_repository(
 
     except RepositorySyncInProgress as exc:
         raise HTTPException(status_code=409, detail="Repository writer is busy or pending publication blocks synchronization.") from exc
+
+    except UnsafeClonePath as exc:
+        raise HTTPException(status_code=409, detail="Repository directory is unsafe; inspect local state.") from exc
 
     except RepositoryNotFound as exc:
         raise HTTPException(

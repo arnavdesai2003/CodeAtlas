@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import CodeFile, Repository
 from app.indexer.errors import InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed
-from app.indexer.paths import regular_source_path
+from app.indexer.paths import regular_source_path, clone_directory
 
 
 REPOSITORY_ROOT = Path("data/repos")
@@ -161,6 +161,7 @@ def ingest_repository(
     clone_url: str,
 ) -> dict:
     owner, repository_name = parse_github_url(clone_url)
+    repository_path = clone_directory(REPOSITORY_ROOT, owner, repository_name)
 
     existing_repository = (
         db.query(Repository)
@@ -170,12 +171,6 @@ def ingest_repository(
 
     if existing_repository:
         raise RepositoryConflict("Repository has already been added.")
-
-    repository_path = (
-        REPOSITORY_ROOT
-        / owner
-        / repository_name
-    )
 
     if repository_path.exists():
         raise RepositoryConflict(

@@ -14,7 +14,7 @@ from app.db.models import (
 from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.errors import RepositoryNotFound, RepositoryCloneMissing
-from app.indexer.paths import regular_source_path
+from app.indexer.paths import regular_source_path, clone_directory
 from app.indexer.repository import (
     LANGUAGE_BY_EXTENSION,
     REPOSITORY_ROOT,
@@ -141,11 +141,7 @@ def _sync_repository(
         repository.clone_url
     )
 
-    repository_path = (
-        REPOSITORY_ROOT
-        / owner
-        / repository_name
-    )
+    repository_path = clone_directory(REPOSITORY_ROOT, owner, repository_name)
 
     if not repository_path.exists():
         raise RepositoryCloneMissing(

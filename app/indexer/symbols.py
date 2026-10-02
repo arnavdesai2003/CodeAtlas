@@ -9,7 +9,7 @@ from app.db.models import (
 from app.indexer.locking import repository_sync_lock
 from app.indexer.parser import parse_python_source
 from app.indexer.repository import REPOSITORY_ROOT, parse_github_url
-from app.indexer.paths import regular_source_path
+from app.indexer.paths import regular_source_path, clone_directory
 
 
 def index_repository_symbols(
@@ -44,11 +44,7 @@ def _index_repository_symbols(db: Session, repository_id: int) -> dict:
         repository.clone_url
     )
 
-    repository_path = (
-        REPOSITORY_ROOT
-        / owner
-        / repository_name
-    )
+    repository_path = clone_directory(REPOSITORY_ROOT, owner, repository_name)
 
     if not repository_path.exists():
         raise FileNotFoundError(

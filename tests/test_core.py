@@ -32,7 +32,7 @@ from elastic_transport import ConnectionError as ElasticsearchConnectionError, A
 from elasticsearch import ApiError
 from app.indexer.errors import (
     InvalidRepositoryURL, RepositoryConflict, RepositoryCloneFailed,
-    RepositoryNotFound, RepositoryCloneMissing,
+    RepositoryNotFound, RepositoryCloneMissing, UnsafeClonePath,
 )
 
 
@@ -117,6 +117,7 @@ class ApiTests(unittest.TestCase):
 
     def test_creation_errors_are_typed_and_sanitized(self):
         for error, status in ((InvalidRepositoryURL("secret URL"), 400),
+                              (UnsafeClonePath("private directory"), 409),
                               (RepositoryConflict("private clone path"), 409),
                               (RepositoryCloneFailed("Git stderr credentials"), 502),
                               (ValueError("internal parser secret"), 500),
@@ -129,6 +130,7 @@ class ApiTests(unittest.TestCase):
 
     def test_sync_errors_do_not_misclassify_internal_failures(self):
         for error, status in ((RepositoryNotFound("private details"), 404),
+                              (UnsafeClonePath("private directory"), 409),
                               (RepositoryCloneMissing("private path"), 409),
                               (routes.RepositorySyncInProgress("private journal"), 409),
                               (ValueError("parser failure"), 500),

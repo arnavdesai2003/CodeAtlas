@@ -19,3 +19,7 @@ class RepositoryCloneMissing(FileNotFoundError):
 
 class RepositoryCloneFailed(RuntimeError):
     pass
+
+
+class UnsafeClonePath(RuntimeError):
+    pass

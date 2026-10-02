@@ -632,3 +632,22 @@ changes or performance claims. Old committed pending work/content is not scrubbe
 automatically. Checks assume stationary clones/trusted roots, not race-free opens;
 hard links, symlinked ancestors above clones, Git configuration/redirects and
 public authorization remain separate boundaries.
+
+## Latest milestone: clone-directory redirection checks (2026-10-01)
+
+Ingestion/new sync/full symbol replacement share clone_directory validation.
+Configured root, owner and clone must not be symlinks (including dangling) or
+non-directory objects. Missing paths remain allowed for atomic ingestion
+reservation; existing missing-clone errors remain. Unsafe paths return sanitized
+409 on creation/sync. No automatic cleanup/repair. Pending journal replay stays
+before filesystem checks and does not reread source. Existing locks, rollback
+and clone retention remain unchanged. See `docs/source-paths.md`.
+
+165 offline tests pass, including redirected-owner ingestion and redirected-clone
+sync/full rejection before Git/parsing, external-file preservation, all component
+levels and API disclosure/status checks. Live CPU/one-thread evaluation reproduced
+all metrics on 25 valid cases, hybrid Recall@10 .880 / MRR .499; live corpus not
+rebuilt. No live ingestion/sync, data/cache/schema/settings/process changes or
+performance claims. Ancestors above configured root are trusted; validation is
+not race-free against hostile local replacements. Git execution configuration
+and public authorization remain separate inspection priorities.

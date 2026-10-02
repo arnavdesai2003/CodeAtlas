@@ -16,6 +16,7 @@ error disclosure, not a public deployment authorization boundary.
 | Sync: expected repository clone absent | 409 | Inspect local clone state. |
 | Sync: writer contention or pending publication/full indexing | 409 | Finish/retry the owning work before synchronization. |
 | Sync: other failure | 500 | Retry synchronization to resume any pending target; investigate repeated failures. |
+| Create/sync: redirected or non-directory clone component | 409 | Inspect directory state; no automatic removal or repair. |
 
 Previously every creation `ValueError` returned 409, Git stderr returned 400,
 and every sync `ValueError` returned 404. Typed exceptions now distinguish
