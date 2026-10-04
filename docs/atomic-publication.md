@@ -335,3 +335,25 @@ stages. They do not exercise building-stage interruption, real service side effe
 PostgreSQL/server crashes, network partitions or filesystem power-loss durability.
 Separate real-service protocol and PostgreSQL lock probes cover their own scopes.
 No application, live data, settings or running services changed in this milestone.
+
+## Building-stage process-exit coverage (2026-10-04)
+
+Seven additional tests in `tests/test_publication_build_process_recovery.py` use
+the same spawned-owner/disk-SQLite approach, starting with a pending building job.
+Disk-backed fake indices record stage creation, unaffected-document copying and
+target write calls; real Elasticsearch/Redis remain mocked. Abrupt exits cover
+build-journal commit, stage creation before identity commit, identity commit,
+copy completion, target write completion, and before/after the ready commit.
+
+Every unready retry chooses a new generation, records the interrupted attempt as
+abandoned and preserves all previously created fake indices unchanged. Attempts
+whose identity never committed remain unverified. The existing pending full job
+survives until finalization. After a ready commit, retry reuses that stage without
+copying or writing again. Final publication switches exactly once, rotates cache,
+removes both journals and retains lifecycle audit rows. The source snapshot and
+Git checkpoint remain unchanged. All 353 offline tests pass.
+
+This adds building-stage metadata/replay coverage to the prior ready/published
+cases. It does not establish real late Elasticsearch task behavior, server crash
+recovery, cross-store atomicity or power-loss durability. No production or live
+service changes were made.

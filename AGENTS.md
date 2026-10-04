@@ -1628,3 +1628,19 @@ External services mocked; production publication/lifecycle code unchanged. No
 live data/services/settings/API changes or quality/performance claims. This
 covers ready/published phases, not building interruption, PostgreSQL/server
 crashes, partitions or power-loss durability. See atomic-publication docs.
+
+## Latest milestone: building-stage publication process-exit coverage (2026-10-04)
+
+Seven additional spawned-process tests cover build-journal commit, stage creation
+before identity commit, identity commit, copy/target-write completion and before/
+after ready commit. Disk SQLite and disk-backed fake external state exercise
+production publication/lifecycle transitions. Unready retries select fresh names,
+abandon interrupted attempts and preserve old fake indices; unknown identities
+remain unverified. Ready-committed retry does not copy/write again. Final journals
+removed, audit retained, source/checkpoint unchanged. 353 offline tests pass.
+
+Shared process fixture extended with opt-in building simulation; preceding seven
+ready/published tests remain intact. No production/live data/services/settings
+changes or performance/quality claims. Real late ES writes/server crash/partition
+and cross-store atomicity remain outside this mocked process-exit coverage.
+See atomic-publication docs for full boundary/limitation details.
