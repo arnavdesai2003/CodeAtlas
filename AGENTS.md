@@ -1843,3 +1843,18 @@ pass. All four actual module --help calls exited safely.
 
 No live probe rerun/scratch mutation/locks/data/settings/API change or quality/
 performance claim; prior live results inherited. See hardening-validation docs.
+
+## Latest checkpoint: live retrieval validation (2026-10-04)
+
+Read-only CPU/one-thread multi-repository evaluation with HF/Transformers offline
+flags reproduced every inherited metric: 25 defined/valid cases, zero invalid,
+hybrid Recall@10 .880 / MRR .499. Cached models only; no downloads. Read-only
+stores observed six repos/4340 PG symbols/4340 ES docs, per-repo counts match
+baseline, active legacy codeatlas_symbols UUID RAHAzCX7Tn2804qrSkpkCQ. Metadata
+inspection found no pending sync/full/publication jobs or journal conflicts.
+
+New quality/count observations, separate operations not atomic cross-store snapshot.
+No ingestion/fetch/reset/reindex/publication/cache flush/rotation/schema/settings/
+services/API change or new performance/capacity claim. Prior 404 offline tests
+inherited, not rerun for docs-only checkpoint. Process CPU/thread/offline flags
+do not alter .env/defaults. See docs/validation-checkpoint-2026-10-04.md.

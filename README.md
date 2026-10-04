@@ -238,6 +238,9 @@ Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as
 metrics. The inherited hybrid Recall@10 baseline is **0.880**; preserve quality
 when changing retrieval, ranking or indexing.
+The [2026-10-04 live checkpoint](docs/validation-checkpoint-2026-10-04.md)
+reproduced every metric with 25 valid cases and verified six repositories,
+4,340 symbols/documents, legacy routing and no pending jobs.
 
 ## Reproducible performance measurements
 
