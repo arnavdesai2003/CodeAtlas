@@ -24,7 +24,8 @@ from app.search.errors import IncompleteSearchError, InvalidSearchResponseError,
 
 def refresh_symbol_index(index_name: str, *, client=None) -> None:
     response = (client if client is not None else elasticsearch_client).indices.refresh(index=index_name)
-    failed = response.get("_shards", {}).get("failed")
+    shards = response.get("_shards") if isinstance(response, Mapping) else None
+    failed = shards.get("failed") if isinstance(shards, Mapping) else None
     if type(failed) is not int or failed != 0:
         raise RuntimeError("Elasticsearch refresh was incomplete; retry indexing.")
 

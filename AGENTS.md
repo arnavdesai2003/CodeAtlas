@@ -1290,3 +1290,14 @@ checks. Invalid containers raise existing publication RuntimeErrors, preserving
 building/ready recovery instead of incidental attribute errors. No tests added
 or run under the recorded constraint; diff whitespace checks passed. No live
 services/publication/settings/corpus/cache changes or new metrics claimed.
+
+## Latest milestone: refresh response container guards (2026-10-04)
+
+Shared Elasticsearch refresh validation now checks response/shard metadata
+mapping shapes before reading the failed count. Malformed containers raise the
+existing incomplete-refresh RuntimeError instead of incidental attribute errors.
+Incremental/full publication retain journaled recovery work and stop before
+cache/checkpoint finalization or alias switching respectively. Valid integer
+zero failure responses remain unchanged. No tests added or run under the
+recorded constraint; diff whitespace checks passed. No live services, settings,
+corpus, cache or publication changes and no new metrics claimed.

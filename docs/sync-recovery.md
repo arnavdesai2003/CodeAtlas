@@ -175,3 +175,9 @@ malformed fields fail closed and leave the committed sync journal/checkpoint
 retryable. Retrying repeats the idempotent path deletion before reindexing the
 same committed symbol IDs. This validates response completeness; it does not
 provide cross-store atomicity.
+
+Refresh responses and their `_shards` metadata must also be mappings. Malformed
+containers raise the existing incomplete-refresh error before cache invalidation
+or checkpoint advancement, retaining the committed sync job for retry. This
+response-shape guard also applies to full-publication refreshes. No tests were
+added or run for this follow-up.

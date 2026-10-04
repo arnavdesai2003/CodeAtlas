@@ -249,3 +249,8 @@ raising incidental attribute errors. Staging-creation acknowledgement responses
 also require a mapping before checking both boolean acknowledgements. These
 guards preserve the existing building/ready retry paths. No tests were added or
 run for this follow-up.
+
+The shared refresh validator requires mapping responses and shard metadata
+before checking integer zero shard failures. Malformed containers produce the
+existing incomplete-refresh error, retaining building work and stopping alias
+publication. No tests were added or run for this response-shape guard.
