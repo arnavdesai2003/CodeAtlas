@@ -198,7 +198,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **381 tests** (2026-10-04), mocks external services and
+The offline suite passes **388 tests** (2026-10-04), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -224,6 +224,9 @@ the read-only PostgreSQL coordination probe passed again after this validation.
 Both `scripts.index_symbols` and `scripts.index_elasticsearch` accept
 `--repository-id ID` (default 1), validating before session creation. See
 [single-repository commands](docs/full-index-recovery.md#single-repository-command-selection-2026-10-04).
+Use `scripts.inspect_recovery_jobs` to inspect pending metadata journals without
+Elasticsearch/Redis access; [recovery inspection](docs/recovery-inspection.md)
+explains conservative resume hints and snapshot limits.
 
 Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as

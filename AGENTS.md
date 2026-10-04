@@ -1745,3 +1745,17 @@ session cleanup after operation failure. 381 offline tests pass.
 No live indexing/publication, schema/rows/corpus/cache/settings/API changes or
 quality/performance measurements. Symbol work still needs ES publication and
 does not discover files/advance checkpoint. See full-index-recovery docs.
+
+## Latest milestone: metadata-only recovery inspection (2026-10-04)
+
+scripts.inspect_recovery_jobs reads sync/full/publication journals without ES/
+Redis access, locks, schema initialization or writes. PostgreSQL repeatable-read
+read-only snapshot; reports IDs/commits/counts/phases/index names, omits clone URLs/
+paths/code/raw stats. Publication owner prioritized; conflicts/unknown phases
+withhold resume hints. Hints never executed; actual retries recheck state/locks.
+Failures sanitized/nonzero, session closes before success output.
+
+Real local PostgreSQL observed no pending jobs. Seven offline regressions bring
+suite to 388 passing tests. No schema/rows/corpus/index/cache/settings/API changes
+or new quality/performance claim. Metadata snapshot is not dependency readiness,
+index integrity or cross-store atomicity. See docs/recovery-inspection.md.
