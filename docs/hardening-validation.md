@@ -64,3 +64,19 @@ and links the detailed protocol/recovery documents.
 
 This milestone changes test organization only. No application behavior, live
 services/data/settings, retrieval evaluation or performance claims changed.
+
+## Verification entrypoint argument safety
+
+The Redis cache, scratch publication, PostgreSQL writer-lock and cross-process
+writer-lock commands now parse arguments before invoking their probes. `--help`
+exits 0 without scratch creation, lock acquisition or owner-process spawning;
+unsupported flags/positionals exit 2. Their no-argument verification and cleanup
+behavior is unchanged. Previously arguments were ignored and could enter a probe
+even when help was requested.
+
+Two offline command regressions cover all four entrypoints. Existing verifier
+failure/cleanup checks still pass with explicit empty argument lists; all 404
+offline tests pass. Four actual module `--help` calls exited safely. No protocol
+probe rerun, scratch mutation, live locks/data/settings/API changes, retrieval
+evaluation or performance measurement occurred. Earlier live protocol results
+remain prior measurements, not newly verified here.

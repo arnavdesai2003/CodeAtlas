@@ -1,4 +1,5 @@
 """Verify PostgreSQL coordination across spawned processes and owner death."""
+import argparse
 import json
 import multiprocessing
 import secrets
@@ -101,7 +102,8 @@ def verify_writer_processes():
             "owner_processes_stopped": True}
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description=__doc__).parse_args(argv)
     try:
         report = verify_writer_processes()
     except Exception as exc:

@@ -59,5 +59,5 @@ class WriterProcessProtocolTests(unittest.TestCase):
     def test_cli_failure_is_nonzero_and_sanitized(self):
         output = io.StringIO()
         with patch.object(protocol, "verify_writer_processes", side_effect=RuntimeError("secret")), redirect_stdout(output):
-            self.assertEqual(protocol.main(), 1)
+            self.assertEqual(protocol.main([]), 1)
         self.assertNotIn("secret", output.getvalue())

@@ -200,7 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **402 tests** (2026-10-04), mocks external services and
+The offline suite passes **404 tests** (2026-10-04), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -218,6 +218,8 @@ Separate live probes verified [Redis cache protocols](docs/cache-consistency.md#
 and [PostgreSQL writer coordination](docs/writer-lock-verification.md), including
 release after owner termination. These checks do not establish cross-store
 atomicity, database/server crash recovery, retrieval quality or capacity.
+The four protocol/lock verification commands handle `--help` without running
+probes and reject unsupported arguments before scratch/service operations.
 
 HTTP boundary checks also cover literal boolean health acknowledgements and
 signed webhook rejection of nonstandard JSON constants before lookup/scheduling.

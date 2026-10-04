@@ -1832,3 +1832,14 @@ Four regressions pass; 402 offline tests pass. Actual help invocation safe.
 
 No live ingestion/clone/metadata/settings/API changes or quality/performance claim.
 See sync-recovery docs for classification and operator limitations.
+
+## Latest milestone: verification command argument safety (2026-10-04)
+
+Cache/publication/writer-lock/cross-process verifiers parse args before probes.
+Help exits 0; unknown flags/positionals exit 2 without scratch work, locks or
+owner processes. No-argument protocol behavior unchanged. Two regressions across
+four commands plus existing verifier failure/cleanup tests pass; 404 offline tests
+pass. All four actual module --help calls exited safely.
+
+No live probe rerun/scratch mutation/locks/data/settings/API change or quality/
+performance claim; prior live results inherited. See hardening-validation docs.

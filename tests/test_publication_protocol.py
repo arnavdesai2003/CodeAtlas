@@ -118,7 +118,7 @@ class PublicationProtocolTests(unittest.TestCase):
         output = io.StringIO()
         with patch.object(protocol, "verify_publication_protocol", side_effect=ConnectionError("private credentials")), \
              redirect_stdout(output):
-            status = protocol.main()
+            status = protocol.main([])
         self.assertEqual(status, 1)
         self.assertEqual(json.loads(output.getvalue())["status"], "failed")
         self.assertNotIn("private credentials", output.getvalue())

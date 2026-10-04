@@ -1,4 +1,5 @@
 """Real PostgreSQL coordination probe; no schema or metadata writes."""
+import argparse
 import json
 import secrets
 from contextlib import ExitStack
@@ -93,7 +94,8 @@ def verify_writer_locks(session_factory=SessionLocal):
             "schema_changes": False, "probe_sessions_closed": True}
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description=__doc__).parse_args(argv)
     try:
         report = verify_writer_locks()
     except Exception as exc:

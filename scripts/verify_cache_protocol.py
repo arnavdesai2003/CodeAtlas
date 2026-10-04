@@ -1,4 +1,5 @@
 """Verify Redis cache fencing in a private namespace, without retrieval or models."""
+import argparse
 import json
 from unittest.mock import patch
 from uuid import uuid4
@@ -105,7 +106,8 @@ def verify_cache_protocol(client, *, on_namespace=None):
             "normal_generation_unchanged": True, "retrieval_executed": False}
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description=__doc__).parse_args(argv)
     try:
         report = verify_cache_protocol(cache.redis_client, on_namespace=lambda prefix: print(
             json.dumps({"status": "starting", "private_namespace": prefix}), flush=True,

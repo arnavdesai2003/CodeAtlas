@@ -1,5 +1,6 @@
 """Exercise publication against scratch ES/Redis artifacts and SQLite metadata."""
 import io
+import argparse
 import json
 from contextlib import redirect_stdout
 from unittest.mock import patch
@@ -224,7 +225,8 @@ def verify_publication_protocol(es, redis, *, on_namespace=None):
             "metadata": "temporary SQLite", "embeddings": "deterministic vectors"}
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description=__doc__).parse_args(argv)
     try:
         report = verify_publication_protocol(engine.elasticsearch_client, cache.redis_client,
             on_namespace=lambda namespace: print(json.dumps({"status": "starting", **namespace}), flush=True))

@@ -59,7 +59,7 @@ class CacheProtocolTests(unittest.TestCase):
         output = io.StringIO()
         with patch.object(protocol, "verify_cache_protocol", side_effect=ConnectionError("private credentials")), \
              redirect_stdout(output):
-            status = protocol.main()
+            status = protocol.main([])
         self.assertEqual(status, 1)
         report = json.loads(output.getvalue())
         self.assertEqual(report["status"], "failed")
