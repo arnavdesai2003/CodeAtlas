@@ -1,5 +1,6 @@
 """Read-only inventory/plans and maintenance-only, revalidated generation cleanup."""
 from dataclasses import asdict, dataclass
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 import math
 
@@ -10,6 +11,7 @@ from app.indexer.locking import generation_maintenance_lock
 from app.search.engine import INDEX_NAME, SEARCH_ALIAS
 from app.search.generation_lifecycle import is_generation_name, utc_now
 from app.search.indexes import alias_target
+from app.search.responses import response_body
 
 
 class RetentionBlocked(RuntimeError):
@@ -252,8 +254,8 @@ def apply_cleanup_plan(db, client, plan, *, quiesced=False, now=None,
                 row = _validate_candidate(candidate, fresh_inventory())
                 _assert_idle(client)
                 if row["exists"]:
-                    response = client.indices.delete(index=candidate["index_name"])
-                    if not response.get("acknowledged"):
+                    response = response_body(client.indices.delete(index=candidate["index_name"]))
+                    if not isinstance(response, Mapping) or response.get("acknowledged") is not True:
                         raise RetentionBlocked("Deletion was not acknowledged; inspect its outcome before retrying.")
                     result["deleted"].append(candidate["index_name"])
                 else:

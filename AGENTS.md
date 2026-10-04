@@ -1345,3 +1345,13 @@ preceding guards; their whitespace checks did not establish client compatibility
 No tests added or run under the recorded constraint. Diff whitespace checks
 passed; installed source confirms the exported wrapper type/body property. No
 live services/routing/settings/corpus/cache changes or new metrics claimed.
+
+## Latest milestone: strict retention deletion acknowledgement (2026-10-04)
+
+Reviewed generation cleanup unwraps Elasticsearch response bodies and requires
+mapping/literal acknowledged=true before recording deleted audit state. Truthy
+malformed values no longer authorize that commit. Rejection stops before audit
+update/further candidates; existing absent-target identity/history retry can
+reconcile an ambiguous deletion. No retention policy, quiescence or lock changes.
+No tests added or run under the recorded constraint; diff whitespace checks
+passed. No live cleanup/services/routing/settings/corpus/cache changes or metrics.

@@ -154,3 +154,12 @@ apply to retries.
 Offline tests commit the audit before injecting acknowledgement loss and retry
 with fresh SQLite sessions and simulated Elasticsearch identities. They do not
 simulate a PostgreSQL network fault or change retention policy.
+
+Deletion acknowledgement is checked against the JSON body of Elasticsearch's
+`ObjectApiResponse` wrapper (plain dictionaries are also supported). The body
+must be a mapping with literal `acknowledged=true`; truthy strings/integers and
+malformed responses cannot authorize the deleted audit state. An ambiguous
+response stops before that audit update or any further candidate. Retry uses the
+existing exact identity/history checks to reconcile a deletion that may already
+have happened. No tests were added or run for this acknowledgement guard, and no
+live cleanup was performed.
