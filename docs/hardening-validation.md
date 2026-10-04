@@ -38,3 +38,9 @@ verification, PostgreSQL concurrency validation, retrieval evaluation or
 performance measurements. Glob coverage checks the exact escaped Redis scan
 pattern; it does not execute a Redis server's matcher. Prior quality/performance
 measurements were not rerun and are not new results of this milestone.
+
+Subsequent [isolated Redis verification](cache-consistency.md#isolated-redis-protocol-verification-2026-10-04)
+exercised the real Lua protocol and glob matcher, including a post-rotation refill
+and four metacharacter/decoy cases. It adds five offline command failure/cleanup
+tests, bringing the suite to 309 passing tests. This follow-up does not add live
+Elasticsearch/PostgreSQL or retrieval/performance validation.

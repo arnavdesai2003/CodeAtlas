@@ -112,3 +112,34 @@ other generations. Missing/invalid old tokens skip physical cleanup after the
 successful rotation; strict invalidation still depends on rotation, not cleanup.
 Random generated tokens, TTLs and fencing remain unchanged. No tests were added
 or run and no live Redis entries were changed for this cleanup guard.
+
+## Isolated Redis protocol verification (2026-10-04)
+
+```sh
+.venv/bin/python -B -m scripts.verify_cache_protocol
+```
+
+The command executes production cache functions against configured Redis in a
+random private namespace. It verifies Lua fill/read and TTL, duplicate/deep JSON
+miss/refill, stale-fill rejection, empty-token recovery and Redis's actual glob
+matching for star/question/bracket/backslash tokens. During rotation it injects
+a new-generation refill, then confirms cleanup removed only the exact old entry
+while preserving that refill and differently named decoy generations.
+
+The command prints its private namespace before access and reports success only
+after exact-key cleanup and an unchanged normal generation check. It does not
+load models, execute retrieval, flush Redis or rotate the normal cache generation.
+It exits nonzero on verification/cleanup/service failures and excludes connection
+details from failure output. Cleanup runs on ordinary exceptions; abrupt process
+termination can leave private artifacts, including the nonexpiring private
+generation key. Use the printed namespace to inspect such artifacts rather than
+flushing Redis. An external rotation of the normal cache during the smoke test
+also invalidates its unchanged-generation check.
+
+Real local Redis passed all six check groups, with four literal-glob cases,
+private namespace removal and normal generation unchanged. Five offline tests
+cover failure cleanup, exact batched deletion, refusal of unrelated scan results
+and sanitized/nonzero CLI failures. All 309 offline tests pass. Docker Desktop
+and the existing local containers were started; API processes were not restarted.
+No corpus/index/settings changes or retrieval/performance claims. Initial
+sandbox execution could not connect; unsandboxed execution completed successfully.

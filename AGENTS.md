@@ -1520,3 +1520,21 @@ nested JSON fixture did not reach decoder capacity; replaced with 10,000 levels
 and verified specific JSON rejection. Final suite passes; no application changes
 needed. No model downloads/live services/corpus/cache/settings/API changes,
 retrieval evaluation or performance claims. Diff whitespace checks passed.
+
+## Latest milestone: isolated Redis protocol verification (2026-10-04)
+
+Added scripts.verify_cache_protocol using production cache functions in a random
+private Redis namespace. Real Redis passed six check groups: Lua fill/read/TTL,
+duplicate/deep JSON refill, stale-fill rejection, literal glob cleanup preserving
+decoy generations/post-rotation refill, and empty-generation fallback/recovery.
+Four metacharacter cases cover star/question/brackets/backslash. The command
+prints its namespace, cleans exact private keys on ordinary failures and reports
+success only after cleanup and unchanged normal generation. Abrupt termination
+can leave private artifacts; inspect the printed namespace, never flush Redis.
+
+Five offline command tests verify failure cleanup, batching, refusal of unrelated
+scan results and sanitized/nonzero failure output. All 309 offline tests pass.
+Docker Desktop and existing containers started; initial sandbox connection failed,
+unsandboxed smoke succeeded. Normal generation unchanged, private artifacts
+removed. No retrieval/model loads, live corpus/index/settings/API restarts or
+performance/quality claims. See cache-consistency for command and limits.
