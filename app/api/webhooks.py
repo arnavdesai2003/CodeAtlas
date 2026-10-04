@@ -32,6 +32,10 @@ def _unique_payload_object(pairs):
     return result
 
 
+def _reject_nonfinite_constant(value):
+    raise ValueError("Nonstandard webhook JSON constant")
+
+
 def verify_github_signature(
     payload: bytes,
     signature: str | None,
@@ -115,7 +119,8 @@ async def github_webhook(
     )
 
     try:
-        payload = json.loads(payload_bytes, object_pairs_hook=_unique_payload_object)
+        payload = json.loads(payload_bytes, object_pairs_hook=_unique_payload_object,
+                             parse_constant=_reject_nonfinite_constant)
     except (ValueError, UnicodeDecodeError, RecursionError) as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook JSON.") from exc
     if not isinstance(payload, dict):

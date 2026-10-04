@@ -76,7 +76,7 @@ def health_check():
 
     # Elasticsearch
     try:
-        if elasticsearch_client.ping():
+        if elasticsearch_client.ping() is True:
             services["elasticsearch"] = {
                 "status": "healthy"
             }

@@ -1703,3 +1703,17 @@ links; hardening-validation documents fixtures and scope.
 Test organization only; no application/live services/data/settings changes,
 new retrieval evaluation or performance claims. External side effects remain
 mocked, SQLite coordination no-op, prior live probe limitations still apply.
+
+## Latest milestone: health/webhook acknowledgement boundaries (2026-10-04)
+
+Elasticsearch health requires literal True, matching Redis acknowledgement
+validation. Installed ES ping implementation inspected: success/failure returns
+actual booleans. Truthy malformed replies fail health without echoing content.
+Signed webhook JSON rejects unquoted NaN/Infinity/-Infinity via parse_constant
+before lookup/scheduling; signature verification remains first. Strings/keys
+using those words remain valid; no numeric range limit added.
+
+Four offline HTTP regressions bring the suite to 371 passing tests, including
+otherwise valid push payloads, nesting/root constants and auth precedence. No
+retrieval/index/ranking change, live probe/webhook, restart, data/settings change
+or performance/quality claim. See API-access/webhook docs for behavior and scope.

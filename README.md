@@ -198,7 +198,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **367 tests** (2026-10-04), mocks external services and
+The offline suite passes **371 tests** (2026-10-04), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -216,6 +216,9 @@ Separate live probes verified [Redis cache protocols](docs/cache-consistency.md#
 and [PostgreSQL writer coordination](docs/writer-lock-verification.md), including
 release after owner termination. These checks do not establish cross-store
 atomicity, database/server crash recovery, retrieval quality or capacity.
+
+HTTP boundary checks also cover literal boolean health acknowledgements and
+signed webhook rejection of nonstandard JSON constants before lookup/scheduling.
 
 Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as

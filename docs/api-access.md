@@ -29,6 +29,19 @@ health access remains unchanged. The existing successful-health fixture now
 provides the explicit Redis acknowledgement. No tests were added or run for
 this follow-up.
 
+## Elasticsearch health acknowledgement (2026-10-04)
+
+Elasticsearch health now also requires a literal `True` from `ping()`. Truthy
+non-booleans (such as integers, strings or mappings) report the dependency as
+unhealthy and make overall health HTTP 503 without echoing their content. The
+installed client's implementation returns actual booleans for success/failure;
+valid replies retain existing behavior. Exception reporting remains sanitized.
+
+An offline HTTP regression exercises negative/malformed replies with the other
+dependencies healthy. All 371 offline tests pass, including the signed webhook
+JSON-constant checks. No live dependency probe, API restart or settings/data change
+was performed for this milestone.
+
 187 offline tests pass. Checks cover every search/repository operation failing
 closed outside local modes, wrong/missing keys, accepted exact-text searches,
 public health, secret redaction and unchanged benchmark bypass restrictions

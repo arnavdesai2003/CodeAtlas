@@ -26,6 +26,20 @@ the exact raw bytes first, and rejection performs no database lookup or schedule
 work. Valid unique-field payloads are unchanged. No tests were added or run for
 this follow-up.
 
+## Nonstandard JSON constants (2026-10-04)
+
+Signed payloads containing the unquoted constants `NaN`, `Infinity` or `-Infinity`
+now return HTTP 400 `Invalid webhook JSON.` at any nesting level before database
+access or scheduling. Python's decoder otherwise accepts these nonstandard JSON
+extensions. Signature verification still precedes parsing. The same words inside
+JSON strings or object keys remain valid. This does not add numeric range limits
+or change valid event handling.
+
+Offline HTTP tests cover root/nested constants, otherwise valid push payloads,
+authentication precedence and valid strings/keys. Together with the health
+acknowledgement regression, all 371 offline tests pass. No live webhook delivery,
+API restart, data/settings change or retrieval/performance measurement occurred.
+
 Valid `ping` and unsupported events retain HTTP 202 with `ok`/`ignored` bodies
 and schedule no work. A valid push must match a registered repository's exact
 clone URL; otherwise it returns 404. Accepted pushes return 202 and schedule

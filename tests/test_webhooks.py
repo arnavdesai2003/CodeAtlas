@@ -15,6 +15,30 @@ from app.api.body_limit import RequestBodyLimit
 
 
 class WebhookTests(unittest.TestCase):
+    def test_signed_nonstandard_json_constants_reject_before_work(self):
+        for constant in (b"NaN", b"Infinity", b"-Infinity"):
+            for body in (constant, b'{"nested":[{"value":' + constant + b'}]}',
+                         b'{"repository":{"clone_url":"https://github.com/o/r"},"value":' + constant + b'}'):
+                with self.subTest(body=body):
+                    response = self.send(body)
+                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response.json(), {"detail": "Invalid webhook JSON."})
+                    self.assert_no_work()
+
+    def test_signature_check_precedes_nonstandard_constant_parsing(self):
+        with patch.object(webhooks.json, "loads") as loads:
+            response = self.send(b'{"value":NaN}', signature="sha256=bad")
+        self.assertEqual(response.status_code, 401)
+        loads.assert_not_called()
+        self.assert_no_work()
+
+    def test_constant_names_in_strings_and_keys_remain_valid_json(self):
+        body = b'{"NaN":"Infinity","nested":["-Infinity",null,true,1.5]}'
+        response = self.send(body, event="ping")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json(), {"status": "ok", "event": "ping"})
+        self.assert_no_work()
+
     def test_signed_decoder_recursion_is_bad_request_before_database(self):
         depth = 10000
         body = b'{"nested":' + b'[' * depth + b'0' + b']' * depth + b'}'
