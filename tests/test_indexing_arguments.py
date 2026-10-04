@@ -8,6 +8,29 @@ from scripts import index_elasticsearch, index_symbols, index_all_elasticsearch,
 
 
 class IndexingArgumentTests(unittest.TestCase):
+    def test_batch_help_never_opens_session_or_indexes(self):
+        for command in (index_all_elasticsearch, index_all_symbols):
+            with patch.object(command, "SessionLocal") as session, \
+                 patch.object(command, "main") as main, redirect_stdout(io.StringIO()) as output:
+                with self.assertRaises(SystemExit) as result:
+                    command.cli(["--help"])
+            self.assertEqual(result.exception.code, 0)
+            self.assertIn("all registered repositories", output.getvalue())
+            session.assert_not_called()
+            main.assert_not_called()
+
+    def test_unsupported_batch_arguments_never_start_full_indexing(self):
+        for command in (index_all_elasticsearch, index_all_symbols):
+            for arguments in (["--repository-id", "6"], ["--unsupported"], ["unexpected"]):
+                with self.subTest(command=command.__name__, arguments=arguments), \
+                     patch.object(command, "SessionLocal") as session, \
+                     patch.object(command, "main") as main, redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as result:
+                        command.cli(arguments)
+                self.assertEqual(result.exception.code, 2)
+                session.assert_not_called()
+                main.assert_not_called()
+
     def test_single_cli_failure_is_sanitized_and_nonzero(self):
         for command in (index_elasticsearch, index_symbols):
             output = io.StringIO()
@@ -20,7 +43,7 @@ class IndexingArgumentTests(unittest.TestCase):
         for command in (index_all_elasticsearch, index_all_symbols):
             output = io.StringIO()
             with patch.object(command, "SessionLocal", side_effect=RuntimeError("private database URL")), redirect_stdout(output):
-                self.assertEqual(command.cli(), 1)
+                self.assertEqual(command.cli([]), 1)
             self.assertNotIn("private database URL", output.getvalue())
 
     def test_batch_continues_after_failure_without_echoing_exception(self):
@@ -34,7 +57,7 @@ class IndexingArgumentTests(unittest.TestCase):
                  patch.object(command, operation, side_effect=[RuntimeError("private credentials"),
                     {"symbols_indexed": 1, "parsed_files": 1, "skipped_files": 0}]) as index, redirect_stdout(output):
                 with self.assertRaises(SystemExit) as failure:
-                    command.cli()
+                    command.cli([])
                 self.assertEqual(str(failure.exception), "1 repositories failed; retry pending work.")
             self.assertEqual(index.call_count, 2)
             self.assertNotIn("private credentials", output.getvalue())

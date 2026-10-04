@@ -1,3 +1,4 @@
+import argparse
 from app.db.database import SessionLocal
 from app.db.models import Repository
 from app.search.engine import index_repository_in_elasticsearch
@@ -70,7 +71,8 @@ def main():
         db.close()
 
 
-def cli():
+def cli(argv=None):
+    argparse.ArgumentParser(description="Build or resume Elasticsearch publication for all registered repositories.").parse_args(argv)
     return run_indexing_command(main)
 
 

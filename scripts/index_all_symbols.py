@@ -1,3 +1,4 @@
+import argparse
 from app.db.database import SessionLocal
 from app.db.models import Repository
 from app.indexer.symbols import index_repository_symbols
@@ -86,7 +87,8 @@ def main():
         db.close()
 
 
-def cli():
+def cli(argv=None):
+    argparse.ArgumentParser(description="Prepare symbol snapshots for all registered repositories.").parse_args(argv)
     return run_indexing_command(main)
 
 

@@ -166,3 +166,18 @@ documents or advance the Git checkpoint. Existing command regressions now verify
 the selected repository in pending-publication output for single/batch commands;
 all 396 offline tests pass. No live indexing, data/settings/API change or new
 quality/performance claim.
+
+## Batch argument safety
+
+`scripts.index_all_symbols` and `scripts.index_all_elasticsearch` now parse
+arguments before opening sessions or starting work. `--help` exits 0 and prints
+the all-repository scope; unsupported flags or positional arguments exit 2.
+Previously these entrypoints ignored arguments and could index the corpus even
+when invoked for help or with a mistaken `--repository-id` option. Select one
+repository with the corresponding single-repository command instead.
+
+No-argument batch behavior, failure continuation and nonzero summaries remain
+unchanged. Two offline regressions verify help and unsupported arguments before
+session/main invocation; existing batch execution checks still pass. All 398
+offline tests pass, and both real `--help` entrypoints exited safely. No live
+indexing or schema/data/settings/API changes occurred.

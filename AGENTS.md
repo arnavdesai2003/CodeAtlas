@@ -1808,3 +1808,15 @@ single/batch repository attribution; 396 offline tests pass.
 
 Output-only guidance; no live indexing/data/settings/API changes or new quality/
 performance claim. See full-index-recovery docs for preparation/publication scope.
+
+## Latest milestone: batch indexing argument safety (2026-10-04)
+
+Both all-repository indexer entrypoints now parse args before sessions/main.
+--help exits 0 without work; unknown flags/positionals exit 2. Previously ignored
+arguments could enter full indexing even for help or mistaken --repository-id.
+No-argument batch execution/continuation/failure summaries unchanged. Single-repo
+commands retain --repository-id. Two regressions plus existing batch checks pass;
+398 offline tests pass. Both actual module --help invocations exited safely.
+
+No live indexing/schema/data/settings/API changes or quality/performance claims.
+See full-index-recovery docs for scope and command selection.
