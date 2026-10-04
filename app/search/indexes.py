@@ -2,6 +2,7 @@
 from collections.abc import Mapping
 
 from elasticsearch import NotFoundError
+from app.search.errors import InvalidSearchResponseError
 from app.search.responses import response_body
 
 
@@ -11,7 +12,7 @@ def alias_target(client, *, alias_name: str) -> str | None:
     except NotFoundError:
         return None
     if not isinstance(aliases, Mapping) or len(aliases) != 1:
-        raise RuntimeError("The search alias must reference exactly one index.")
+        raise InvalidSearchResponseError("The search alias must reference exactly one index.")
     target, metadata = next(iter(aliases.items()))
     names = metadata.get("aliases") if isinstance(metadata, Mapping) else None
     if (
@@ -19,7 +20,7 @@ def alias_target(client, *, alias_name: str) -> str | None:
         or not isinstance(names, Mapping)
         or alias_name not in names or not isinstance(names[alias_name], Mapping)
     ):
-        raise RuntimeError("The search alias response was invalid.")
+        raise InvalidSearchResponseError("The search alias response was invalid.")
     return target
 
 

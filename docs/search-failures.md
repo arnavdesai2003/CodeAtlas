@@ -137,3 +137,11 @@ failure path. Omitted completion fields retain prior compatibility; this is
 validation of reported metadata, not a new completeness guarantee for omitted
 fields. Valid ranking and result formatting are unchanged. No tests were added
 or run and no live evaluation was performed for this follow-up.
+
+Malformed alias routing responses (invalid collection/target count or alias
+metadata) now raise `InvalidSearchResponseError` rather than plain `RuntimeError`,
+so HTTP search uses the same sanitized 503 path as invalid retrieval responses.
+Missing aliases retain legacy fallback and transport errors still propagate to
+the existing backend handler. Invalid routing cannot populate cache or publish
+successful coalesced work. This changes error classification, not valid routing
+or ranking. No tests were added or run for this follow-up.

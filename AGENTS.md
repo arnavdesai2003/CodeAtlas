@@ -1486,3 +1486,14 @@ Installed client source documents boolean PONG acknowledgement. Existing healthy
 fixture aligned; no tests added or run under the recorded constraint. Diff
 whitespace checks passed. No live services/settings/corpus/cache changes or
 new metrics claimed. See api-access.
+
+## Latest milestone: typed alias-routing failures (2026-10-04)
+
+Malformed alias response shape/target count/metadata now raise existing
+InvalidSearchResponseError instead of plain RuntimeError. HTTP search catches
+this through IncompleteSearchError and returns sanitized 503, matching documented
+backend-failure behavior and preventing cache/shared success. RuntimeError
+compatibility remains through inheritance; valid routing, legacy fallback,
+transport behavior and ranking unchanged. Search request bounds reviewed without
+changes. No tests added or run under the recorded constraint; diff whitespace
+checks passed. No live services/settings/corpus/cache changes or new metrics.
