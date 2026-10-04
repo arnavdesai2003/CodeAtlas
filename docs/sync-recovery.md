@@ -190,3 +190,13 @@ check rather than deleting/recreating an ambiguous outcome. This also applies
 to initial legacy provisioning during full publication; it does not validate an
 existing index's mapping or add a new reconciliation protocol. No tests were
 added or run for this acknowledgement guard.
+
+The provisioning helper creates only the legacy bootstrap index
+`codeatlas_symbols`. If incremental deletion/indexing resolves a missing
+published generation, it raises before issuing those writes rather than creating
+an empty replacement with the same name. The committed sync journal remains for
+recovery; reconcile the missing generation before retrying. Existing generations
+and legacy bootstrap behavior remain unchanged. This existence check does not
+prevent external deletion racing a subsequent write or Elasticsearch automatic
+index creation; keep direct/manual writers and deletion outside normal operation.
+No tests were added or run for this guard.

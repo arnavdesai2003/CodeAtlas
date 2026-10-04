@@ -1321,3 +1321,14 @@ index. Existing-index retry behavior remains; this does not validate mappings or
 reconcile missing published generations. Initial legacy provisioning uses the
 same check. No tests added or run under the recorded constraint; diff whitespace
 checks passed. No live services/routing/settings/corpus/cache changes or metrics.
+
+## Latest milestone: missing published-generation write guard (2026-10-04)
+
+Symbol-index provisioning now creates only the legacy bootstrap index. Missing
+nonlegacy targets raise before incremental delete/index writes instead of
+recreating an empty published generation. Existing generations remain writable;
+committed sync work remains retryable after operator reconciliation. This is an
+existence-check guard, not protection against external deletion racing later
+writes or Elasticsearch auto-creation. No tests added or run under the recorded
+constraint; diff whitespace checks passed. No live routing/services/settings/
+corpus/cache changes or new metrics claimed. See sync-recovery.

@@ -151,7 +151,7 @@ def create_symbol_index(
     index_name: str | None = None,
 ) -> None:
     """
-    Create the CodeAtlas Elasticsearch index if it does not exist.
+    Provision the legacy index; require published generations to exist.
     """
 
     index_name = index_name or resolve_active_index(
@@ -159,6 +159,8 @@ def create_symbol_index(
     )
     if client.indices.exists(index=index_name):
         return
+    if index_name != INDEX_NAME:
+        raise RuntimeError("Published Elasticsearch generation is missing; reconcile before indexing.")
 
     response = client.indices.create(
         index=index_name,
