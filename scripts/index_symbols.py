@@ -1,7 +1,7 @@
 import argparse
 from app.db.database import SessionLocal
 from app.indexer.locking import validate_repository_id
-from scripts.arguments import repository_id_argument
+from scripts.arguments import repository_id_argument, run_indexing_command
 from app.indexer.symbols import index_repository_symbols
 
 
@@ -28,8 +28,8 @@ def main(repository_id: int = 1):
 def cli(argv=None):
     parser = argparse.ArgumentParser(description="Build or resume symbols for one repository.")
     parser.add_argument("--repository-id", type=repository_id_argument, default=1)
-    main(parser.parse_args(argv).repository_id)
+    return run_indexing_command(main, parser.parse_args(argv).repository_id)
 
 
 if __name__ == "__main__":
-    cli()
+    raise SystemExit(cli())

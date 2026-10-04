@@ -1,6 +1,7 @@
 from app.db.database import SessionLocal
 from app.db.models import Repository
 from app.indexer.symbols import index_repository_symbols
+from scripts.arguments import run_indexing_command
 
 
 def main():
@@ -67,7 +68,7 @@ def main():
                 )
 
                 print(
-                    f"{type(exc).__name__}: {exc}"
+                    f"{type(exc).__name__}: Indexing failed; inspect pending recovery work."
                 )
 
             print()
@@ -85,5 +86,9 @@ def main():
         db.close()
 
 
+def cli():
+    return run_indexing_command(main)
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cli())

@@ -2,11 +2,45 @@
 import io
 from contextlib import redirect_stderr, redirect_stdout
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
-from scripts import index_elasticsearch, index_symbols
+from scripts import index_elasticsearch, index_symbols, index_all_elasticsearch, index_all_symbols
 
 
 class IndexingArgumentTests(unittest.TestCase):
+    def test_single_cli_failure_is_sanitized_and_nonzero(self):
+        for command in (index_elasticsearch, index_symbols):
+            output = io.StringIO()
+            with patch.object(command, "main", side_effect=RuntimeError("private backend token")), redirect_stdout(output):
+                self.assertEqual(command.cli([]), 1)
+            self.assertIn("RuntimeError", output.getvalue())
+            self.assertNotIn("private backend token", output.getvalue())
+
+    def test_batch_session_failure_is_sanitized_and_nonzero(self):
+        for command in (index_all_elasticsearch, index_all_symbols):
+            output = io.StringIO()
+            with patch.object(command, "SessionLocal", side_effect=RuntimeError("private database URL")), redirect_stdout(output):
+                self.assertEqual(command.cli(), 1)
+            self.assertNotIn("private database URL", output.getvalue())
+
+    def test_batch_continues_after_failure_without_echoing_exception(self):
+        for command, operation in ((index_all_elasticsearch, "index_repository_in_elasticsearch"),
+                                   (index_all_symbols, "index_repository_symbols")):
+            db = Mock()
+            db.query.return_value.order_by.return_value.all.return_value = [
+                SimpleNamespace(id=1, name="first"), SimpleNamespace(id=2, name="second")]
+            output = io.StringIO()
+            with patch.object(command, "SessionLocal", return_value=db), \
+                 patch.object(command, operation, side_effect=[RuntimeError("private credentials"),
+                    {"symbols_indexed": 1, "parsed_files": 1, "skipped_files": 0}]) as index, redirect_stdout(output):
+                with self.assertRaises(SystemExit) as failure:
+                    command.cli()
+                self.assertEqual(str(failure.exception), "1 repositories failed; retry pending work.")
+            self.assertEqual(index.call_count, 2)
+            self.assertNotIn("private credentials", output.getvalue())
+            self.assertIn("RuntimeError", output.getvalue())
+            db.close.assert_called_once()
+
     def test_invalid_cli_ids_exit_before_session_creation(self):
         for command in (index_elasticsearch, index_symbols):
             with patch.object(command, "SessionLocal") as sessions:

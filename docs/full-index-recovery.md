@@ -136,3 +136,18 @@ session creation; direct `main()` calls also validate before opening a session.
 Five offline command tests cover rejection, default/explicit selection, dispatch
 and session cleanup after failure. All 381 offline tests pass. No live indexing,
 schema/data/settings changes or performance/quality measurement occurred.
+
+## Indexing command failure output
+
+Single-repository indexing CLIs now return exit 1 with an exception type and fixed
+recovery guidance instead of an unhandled dependency traceback. Batch CLIs also
+sanitize session/setup failures; per-repository failures retain their repository
+attribution and exception type without raw exception text. Batches continue after
+ordinary repository failures and retain their existing nonzero failure summary.
+Direct Python `main()` calls still propagate exceptions for callers/tests.
+
+Three new offline regressions verify sanitized single/batch failures, setup errors,
+continuation to a successful second repository and session closure. All 395 offline
+tests pass. No live indexing, failure injection, data/settings/API changes or new
+retrieval/performance claims. Pending jobs remain available for recovery; output
+sanitization does not repair or discard them.

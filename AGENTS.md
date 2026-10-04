@@ -1771,3 +1771,16 @@ unsupported args exit 2. Four offline regressions bring suite to 392 passing tes
 No live database inspection/mutation, services/settings/API changes or new quality/
 performance claims. Prior live no-pending-jobs observation is inherited. See
 docs/recovery-inspection.md; inspection never repairs journals automatically.
+
+## Latest milestone: indexing CLI failure sanitization (2026-10-04)
+
+Single-repository symbol/ES CLI wrappers catch ordinary exceptions and return 1
+with type/fixed recovery guidance, no dependency traceback. Batch per-repository
+failures omit raw exception text while preserving attribution, continuation and
+nonzero summary; top-level session/setup failures also sanitized. Direct main()
+calls retain exception propagation. Three regressions verify failure sanitation,
+successful second-repository continuation and session cleanup; 395 tests pass.
+
+No live indexing/failure injection, data/settings/API changes or retrieval/quality/
+performance claim. Journals unchanged; output changes do not repair/discard work.
+See full-index-recovery docs for operator behavior and boundaries.
