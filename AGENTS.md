@@ -1355,3 +1355,14 @@ update/further candidates; existing absent-target identity/history retry can
 reconcile an ambiguous deletion. No retention policy, quiescence or lock changes.
 No tests added or run under the recorded constraint; diff whitespace checks
 passed. No live cleanup/services/routing/settings/corpus/cache changes or metrics.
+
+## Latest milestone: strict retention task inspection (2026-10-04)
+
+Cleanup task inspection unwraps response bodies and validates mapping nodes,
+node entries and task collections. Optional node/task failures require empty
+lists; malformed falsey values cannot establish idle state. Empty nodes remains
+accepted; malformed inspection or any write task blocks deletion. Existing
+quiescence/locking requirements remain and external post-inspection writes are
+not excluded. No tests added or run under the recorded constraint; diff
+whitespace checks passed. No live cleanup/service/settings/corpus/cache changes
+or new metrics claimed. See index-generation-retention.

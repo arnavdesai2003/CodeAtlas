@@ -167,11 +167,23 @@ def make_cleanup_plan(inventory):
 def _assert_idle(client):
     # Reader quiescence is an operator prerequisite. Also reject all active ES
     # write tasks, including copies continuing after a publisher has stopped.
-    result = client.tasks.list(actions="indices:data/write/*", detailed=False, group_by="nodes")
-    if result.get("node_failures") or result.get("task_failures") or "nodes" not in result:
+    result = response_body(client.tasks.list(
+        actions="indices:data/write/*", detailed=False, group_by="nodes",
+    ))
+    if not isinstance(result, Mapping):
         raise RetentionBlocked("Elasticsearch task inspection was incomplete.")
-    if any(node.get("tasks") for node in result["nodes"].values()):
-        raise RetentionBlocked("Elasticsearch write tasks are still running; wait before cleanup.")
+    for field in ("node_failures", "task_failures"):
+        if field in result and (not isinstance(result[field], list) or result[field]):
+            raise RetentionBlocked("Elasticsearch task inspection was incomplete.")
+    nodes = result.get("nodes")
+    if not isinstance(nodes, Mapping):
+        raise RetentionBlocked("Elasticsearch task inspection was incomplete.")
+    for node in nodes.values():
+        tasks = node.get("tasks") if isinstance(node, Mapping) else None
+        if not isinstance(tasks, Mapping):
+            raise RetentionBlocked("Elasticsearch task inspection was incomplete.")
+        if tasks:
+            raise RetentionBlocked("Elasticsearch write tasks are still running; wait before cleanup.")
 
 
 def _assert_inventory_safe(inventory):

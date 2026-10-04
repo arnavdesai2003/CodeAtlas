@@ -163,3 +163,12 @@ response stops before that audit update or any further candidate. Retry uses the
 existing exact identity/history checks to reconcile a deletion that may already
 have happened. No tests were added or run for this acknowledgement guard, and no
 live cleanup was performed.
+
+Write-task inspection unwraps client response bodies and requires a mapping
+`nodes` collection with mapping node entries and task collections. Optional
+`node_failures`/`task_failures` must be empty lists when present; malformed falsey
+values are not evidence of successful inspection. An empty `nodes` mapping is
+accepted. Malformed shapes or any reported write task block cleanup before
+deletion; task API errors remain failures. This does not prove reader quiescence
+or exclude external writes starting after inspection. No tests were added or run
+for this guard, and no live cleanup was performed.
