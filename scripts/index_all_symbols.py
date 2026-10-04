@@ -42,7 +42,7 @@ def main():
 
                 total_symbols += symbol_count
 
-                print("Publication pending; run full Elasticsearch indexing.")
+                print(f"Publication pending; next: .venv/bin/python -m scripts.index_elasticsearch --repository-id {repository.id}")
 
                 print(
                     f"{repository.name:<20} "

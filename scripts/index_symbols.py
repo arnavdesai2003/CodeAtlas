@@ -15,11 +15,15 @@ def main(repository_id: int = 1):
             repository_id=repository_id,
         )
 
-        print("Symbol indexing completed")
+        if result.get("resumed") is True:
+            print("Existing symbol snapshot retained; Elasticsearch publication pending.")
+        else:
+            print("Symbol snapshot prepared; Elasticsearch publication pending.")
         print()
 
         for key, value in result.items():
             print(f"{key}: {value}")
+        print(f"Next: .venv/bin/python -m scripts.index_elasticsearch --repository-id {repository_id}")
 
     finally:
         db.close()

@@ -39,6 +39,8 @@ class IndexingArgumentTests(unittest.TestCase):
             self.assertEqual(index.call_count, 2)
             self.assertNotIn("private credentials", output.getvalue())
             self.assertIn("RuntimeError", output.getvalue())
+            if command is index_all_symbols:
+                self.assertIn("scripts.index_elasticsearch --repository-id 2", output.getvalue())
             db.close.assert_called_once()
 
     def test_invalid_cli_ids_exit_before_session_creation(self):
@@ -71,11 +73,15 @@ class IndexingArgumentTests(unittest.TestCase):
         for command, operation in ((index_elasticsearch, "index_repository_in_elasticsearch"),
                                    (index_symbols, "index_repository_symbols")):
             db = Mock()
+            output = io.StringIO()
             with patch.object(command, "SessionLocal", return_value=db), \
-                 patch.object(command, operation, return_value={}) as index, redirect_stdout(io.StringIO()):
+                 patch.object(command, operation, return_value={}) as index, redirect_stdout(output):
                 command.main(6)
             index.assert_called_once_with(db=db, repository_id=6)
             db.close.assert_called_once()
+            if command is index_symbols:
+                self.assertIn("Elasticsearch publication pending", output.getvalue())
+                self.assertIn("scripts.index_elasticsearch --repository-id 6", output.getvalue())
 
     def test_operation_failure_still_closes_session(self):
         for command, operation in ((index_elasticsearch, "index_repository_in_elasticsearch"),

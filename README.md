@@ -224,6 +224,8 @@ the read-only PostgreSQL coordination probe passed again after this validation.
 Both `scripts.index_symbols` and `scripts.index_elasticsearch` accept
 `--repository-id ID` (default 1), validating before session creation. See
 [single-repository commands](docs/full-index-recovery.md#single-repository-command-selection-2026-10-04).
+Symbol commands distinguish prepared/retained snapshots from pending publication
+and print the next Elasticsearch command with the selected repository ID.
 Use `scripts.inspect_recovery_jobs` to inspect pending metadata journals without
 Elasticsearch/Redis access; [recovery inspection](docs/recovery-inspection.md)
 explains conservative resume hints and snapshot limits.

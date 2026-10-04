@@ -1797,3 +1797,14 @@ One regression plus strengthened existing assertions verify reasons/commands;
 Metadata reporting only; no live access/mutation, application writer/retrieval,
 services/settings/API changes or quality/performance claim. Reasons are snapshot
 observations, not dependency readiness or automatic reconciliation.
+
+## Latest milestone: explicit symbol publication guidance (2026-10-04)
+
+Single symbol command distinguishes prepared snapshots from retained committed
+work and explicitly states ES publication pending. Prints the exact ES command
+for selected repository ID; batch symbol output does likewise. No automatic
+publication/reparse/checkpoint change. Existing command tests strengthened for
+single/batch repository attribution; 396 offline tests pass.
+
+Output-only guidance; no live indexing/data/settings/API changes or new quality/
+performance claim. See full-index-recovery docs for preparation/publication scope.

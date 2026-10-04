@@ -151,3 +151,18 @@ continuation to a successful second repository and session closure. All 395 offl
 tests pass. No live indexing, failure injection, data/settings/API changes or new
 retrieval/performance claims. Pending jobs remain available for recovery; output
 sanitization does not repair or discard them.
+
+## Symbol preparation output
+
+Single-repository symbol indexing now says that the snapshot is prepared and
+Elasticsearch publication is pending. If it returns a previously committed job,
+it says the existing snapshot was retained. Both paths print the exact next
+`scripts.index_elasticsearch --repository-id ID` command for the selected ID.
+Batch symbol output also prints that repository-specific command rather than
+an unspecified full-index instruction.
+
+This is operator guidance only: symbol preparation still does not publish search
+documents or advance the Git checkpoint. Existing command regressions now verify
+the selected repository in pending-publication output for single/batch commands;
+all 396 offline tests pass. No live indexing, data/settings/API change or new
+quality/performance claim.
