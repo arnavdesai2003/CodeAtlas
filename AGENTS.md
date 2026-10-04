@@ -1674,3 +1674,18 @@ production/live data/services/settings or URL canonicalization changes. This
 does not establish PostgreSQL constraint races, real Git/network behavior,
 external filesystem replacement or distributed filesystem guarantees. See
 sync-recovery docs. Prior process-exit and publication coverage remains passing.
+
+## Latest milestone: retention process-exit coverage (2026-10-04)
+
+Six tests use spawned cleanup owners, file-backed SQLite audit and disk-backed
+simulated index inventory/deletions. Production inspector/planner create exact
+reviewed plans. Abrupt exits before/after deletion, before/after audit commit and
+before second candidate deletion retry unchanged plans. Absent targets reconcile
+without repeat deletes, audit/timestamps persist, active/legacy/retained indices
+stay protected. Recreated UUID blocks all further deletion and audit changes.
+367 offline tests pass. See index-generation-retention docs.
+
+ES/tasks mocked, SQLite locks no-op; quiescence attests isolated test state only.
+No live maintenance/deletion, application/services/data/settings changes or new
+quality/performance claims. Real reader quiescence/server deletion, PostgreSQL
+crash, partition and power-loss durability remain outside this coverage.

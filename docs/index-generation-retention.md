@@ -164,6 +164,28 @@ existing exact identity/history checks to reconcile a deletion that may already
 have happened. No tests were added or run for this acknowledgement guard, and no
 live cleanup was performed.
 
+## Cleanup process-exit regression coverage (2026-10-04)
+
+Six tests in `tests/test_retention_process_recovery.py` use temporary file-backed
+SQLite audit rows and disk-backed simulated Elasticsearch inventory/deletions.
+Plans come from the production inspector and planner. Spawned owners exit via
+`os._exit(76)` before deletion, after deletion before acknowledgement, before/after
+audit commit, and before deleting the second reviewed candidate. Cleanup handlers
+are bypassed; the parent retries with the exact unchanged reviewed plan.
+
+Retries reconcile absent same-identity targets without repeating their deletion,
+preserve committed deletion timestamps, retain every audit row, and delete only
+the two reviewed candidates. Active, legacy and retained generations stay intact.
+A sixth scenario recreates the first deleted index with a different UUID: retry
+fails before any further deletion and leaves audit state unchanged. All 367
+offline tests pass.
+
+The quiescence attestation applies only to isolated test state; no live maintenance
+or deletion occurred. Elasticsearch/tasks are mocked and SQLite locks are no-ops.
+These checks verify durable local audit/replay behavior, not real server deletion,
+reader quiescence, PostgreSQL/server crashes, partitions or power-loss durability.
+No application, live services/data or settings changed.
+
 Reviewed plans must include exactly both policy fields, `min_age_hours` and
 `keep_retired`. Apply rejects missing or unknown policy fields rather than
 silently substituting defaults. Generated plans already include both values;
