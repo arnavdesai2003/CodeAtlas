@@ -107,5 +107,3 @@ def _publish(database, external, boundary=None, *, building=False):
                 return engine.index_repository_in_elasticsearch(db, 1)
     finally:
         sql.dispose()
-
-
