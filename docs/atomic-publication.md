@@ -262,3 +262,12 @@ to legacy routing. Only an Elasticsearch not-found response enables the existing
 legacy fallback. Resolution still occurs once per hybrid request, with the same
 target shared by both branches. Existing success fixtures were aligned; no tests
 were added or run for this follow-up.
+
+The installed Elasticsearch client returns `ObjectApiResponse` objects that
+delegate dictionary access but do not implement `Mapping`. Alias, count,
+creation, reindex and alias-switch validators unwrap these objects to their JSON
+body before checking structure. Plain dictionary responses remain supported;
+malformed wrapped bodies still fail the same checks. This corrects the earlier
+container guards, which otherwise reject valid client responses. The shared
+refresh and incremental deletion validators use the same unwrapping. No tests
+were added or run for this compatibility correction.

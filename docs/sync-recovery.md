@@ -200,3 +200,10 @@ and legacy bootstrap behavior remain unchanged. This existence check does not
 prevent external deletion racing a subsequent write or Elasticsearch automatic
 index creation; keep direct/manual writers and deletion outside normal operation.
 No tests were added or run for this guard.
+
+Elasticsearch `ObjectApiResponse` wrappers are unwrapped to their JSON body
+before validating delete, refresh and creation responses. The installed client
+wrapper delegates dictionary methods without implementing `Mapping`; checking
+the wrapper directly would reject valid responses. Plain dictionaries and all
+strict completion/acknowledgement checks remain supported. No tests were added
+or run for this compatibility correction.

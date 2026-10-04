@@ -12,6 +12,7 @@ from app.db.models import (
 )
 from app.search.cache import invalidate_search_cache
 from app.search.indexes import alias_target
+from app.search.responses import response_body
 from app.search.generation_lifecycle import (
     begin_build_attempt, remember_active_source, remember_created_stage,
     remember_publication, verify_recorded_index,
@@ -19,6 +20,7 @@ from app.search.generation_lifecycle import (
 
 
 def _check_response(response, operation: str) -> None:
+    response = response_body(response)
     failures = response.get("failures") if isinstance(response, Mapping) else None
     conflicts = response.get("version_conflicts") if isinstance(response, Mapping) else None
     if (
@@ -31,7 +33,7 @@ def _check_response(response, operation: str) -> None:
 
 
 def checked_count(client, **kwargs) -> int:
-    response = client.count(**kwargs)
+    response = response_body(client.count(**kwargs))
     if not isinstance(response, Mapping):
         raise RuntimeError("Elasticsearch publication count was incomplete; retry full indexing.")
     shards = response.get("_shards")
@@ -57,6 +59,7 @@ def create_staging_index(client, *, source: str, stage: str) -> None:
         "analysis", "similarity", "mapping",
     ) if key in source_settings}
     response = client.indices.create(index=stage, mappings=mappings, settings=settings)
+    response = response_body(response)
     if (
         not isinstance(response, Mapping)
         or response.get("acknowledged") is not True
@@ -124,6 +127,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
                 dest={"index": job.staging_index}, refresh=True,
                 wait_for_completion=True,
             )
+            response = response_body(response)
             _check_response(response, "staging copy")
             total = response.get("total")
             created = response.get("created")
@@ -159,7 +163,7 @@ def publish_repository_index(db, repository_id: int) -> dict:
                                        "must_exist": True}})
         actions.append({"add": {"index": job.staging_index, "alias": engine.SEARCH_ALIAS,
                                 "is_write_index": True}})
-        response = client.indices.update_aliases(actions=actions)
+        response = response_body(client.indices.update_aliases(actions=actions))
         if (
             not isinstance(response, Mapping)
             or response.get("acknowledged") is not True

@@ -13,6 +13,7 @@ from app.db.models import (
 )
 from app.indexer.locking import repository_sync_lock
 from app.search.indexes import resolve_active_index
+from app.search.responses import response_body
 from app.search.embeddings import (
     EMBEDDING_DIMS,
     build_symbol_embedding_text,
@@ -24,6 +25,7 @@ from app.search.errors import IncompleteSearchError, InvalidSearchResponseError,
 
 def refresh_symbol_index(index_name: str, *, client=None) -> None:
     response = (client if client is not None else elasticsearch_client).indices.refresh(index=index_name)
+    response = response_body(response)
     shards = response.get("_shards") if isinstance(response, Mapping) else None
     failed = shards.get("failed") if isinstance(shards, Mapping) else None
     if type(failed) is not int or failed != 0:
@@ -241,6 +243,7 @@ def create_symbol_index(
             }
         },
     )
+    response = response_body(response)
     if (
         not isinstance(response, Mapping)
         or response.get("acknowledged") is not True
@@ -455,6 +458,7 @@ def delete_paths_from_elasticsearch(
         conflicts="proceed",
         refresh=True,
     )
+    response = response_body(response)
     total = response.get("total") if isinstance(response, Mapping) else None
     deleted = response.get("deleted") if isinstance(response, Mapping) else None
     conflicts = response.get("version_conflicts") if isinstance(response, Mapping) else None

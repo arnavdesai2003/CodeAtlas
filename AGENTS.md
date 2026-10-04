@@ -1332,3 +1332,16 @@ existence-check guard, not protection against external deletion racing later
 writes or Elasticsearch auto-creation. No tests added or run under the recorded
 constraint; diff whitespace checks passed. No live routing/services/settings/
 corpus/cache changes or new metrics claimed. See sync-recovery.
+
+## Latest correction: Elasticsearch response wrapper compatibility (2026-10-04)
+
+Static inspection of installed elastic_transport found ObjectApiResponse does
+not implement Mapping, despite delegating dictionary access. Recent container
+guards would reject valid real-client responses. Added shared explicit wrapper
+unwrapping for alias resolution, refresh, creation, deletion, publication counts,
+reindex completion and alias-switch checks. Validation now applies to JSON bodies;
+plain dictionaries and strict field checks remain supported. This corrects the
+preceding guards; their whitespace checks did not establish client compatibility.
+No tests added or run under the recorded constraint. Diff whitespace checks
+passed; installed source confirms the exported wrapper type/body property. No
+live services/routing/settings/corpus/cache changes or new metrics claimed.

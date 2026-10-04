@@ -2,11 +2,12 @@
 from collections.abc import Mapping
 
 from elasticsearch import NotFoundError
+from app.search.responses import response_body
 
 
 def alias_target(client, *, alias_name: str) -> str | None:
     try:
-        aliases = client.indices.get_alias(name=alias_name)
+        aliases = response_body(client.indices.get_alias(name=alias_name))
     except NotFoundError:
         return None
     if not isinstance(aliases, Mapping) or len(aliases) != 1:
