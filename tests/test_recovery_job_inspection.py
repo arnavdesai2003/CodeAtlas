@@ -1,7 +1,7 @@
 """Metadata-only pending-job inspection and conservative resume hints."""
 import io
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from unittest.mock import Mock, patch
 from app.db.database import Base
 from app.db.models import IndexPublicationJob, Repository, RepositoryFullIndexJob, RepositorySyncJob
@@ -30,6 +30,43 @@ class RecoveryJobInspectionTests(unittest.TestCase):
         self.assertEqual(report["sync_jobs"], [])
         self.assertFalse(report["publication_blocks_other_writers"])
         commit.assert_not_called()
+
+    def test_malformed_path_metadata_cannot_produce_counts_or_hints(self):
+        job = self.sync_job(1)
+        self.db.add(job)
+        self.db.commit()
+        for value in ("private.py", {}, None, [None], [""], [1]):
+            with self.subTest(value=value):
+                job.affected_paths = value
+                self.db.commit()
+                with self.assertRaisesRegex(RuntimeError, "path metadata"):
+                    command.inspect_recovery_jobs(self.db)
+
+    def test_malformed_file_metadata_cannot_produce_counts_or_hints(self):
+        job = self.sync_job(1)
+        self.db.add(job)
+        self.db.commit()
+        for value in ("1", {}, None, [True], [0], [-1], [2147483648], ["1"]):
+            with self.subTest(value=value):
+                job.file_ids = value
+                self.db.commit()
+                with self.assertRaises((RuntimeError, ValueError)):
+                    command.inspect_recovery_jobs(self.db)
+
+    def test_help_exits_before_database_access(self):
+        with patch.object(command, "SessionLocal") as session, redirect_stdout(io.StringIO()) as output:
+            with self.assertRaises(SystemExit) as result:
+                command.main(["--help"])
+        self.assertEqual(result.exception.code, 0)
+        self.assertIn("Elasticsearch or Redis", output.getvalue())
+        session.assert_not_called()
+
+    def test_unknown_arguments_exit_before_database_access(self):
+        with patch.object(command, "SessionLocal") as session, redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as result:
+                command.main(["--unsupported"])
+        self.assertEqual(result.exception.code, 2)
+        session.assert_not_called()
 
     def test_pending_jobs_include_counts_without_paths_or_raw_stats(self):
         self.db.add(self.sync_job(2))
@@ -87,6 +124,6 @@ class RecoveryJobInspectionTests(unittest.TestCase):
         output = io.StringIO()
         with patch.object(command, "SessionLocal", return_value=db), \
              patch.object(command, "inspect_recovery_jobs", side_effect=RuntimeError("secret")), redirect_stdout(output):
-            self.assertEqual(command.main(), 1)
+            self.assertEqual(command.main([]), 1)
         self.assertNotIn("secret", output.getvalue())
         db.__exit__.assert_called_once()

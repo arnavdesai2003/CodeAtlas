@@ -30,3 +30,17 @@ tests cover job counts, resume ordering/conflicts, unknown phases, read-only
 transaction setup, no commits and sanitized failure/session closure. The full
 offline suite passes 388 tests. No schema/data/index/cache/settings/API changes,
 retrieval evaluation or performance measurement occurred.
+
+## Malformed metadata and CLI arguments
+
+Inspection requires sync paths to be a list of nonempty strings and file IDs to
+be a list of positive int32 integers. Strings, mappings, JSON null, malformed
+elements or invalid ID values fail inspection before counts or resume hints are
+reported. Empty lists remain valid for deletion-only or empty changes. Failure
+output omits raw metadata; it never repairs or deletes malformed journal rows.
+
+`--help` exits before session creation; unsupported arguments return argument
+error/exit 2 before database access. Four new offline regressions bring the suite
+to 392 passing tests, including malformed persisted JSON containers/elements and
+CLI access ordering. No live database inspection or mutation was needed for this
+follow-up; the earlier PostgreSQL observation remains a prior result.

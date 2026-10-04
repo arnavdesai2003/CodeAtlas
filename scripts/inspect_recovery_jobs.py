@@ -1,4 +1,5 @@
 """Read pending metadata journals without contacting Elasticsearch or Redis."""
+import argparse
 import json
 from sqlalchemy import select, text
 
@@ -18,6 +19,15 @@ def inspect_recovery_jobs(db):
     publication = db.scalars(select(IndexPublicationJob).order_by(IndexPublicationJob.id)).all()
     for job in [*sync, *full, *publication]:
         validate_repository_id(job.repository_id)
+    for job in sync:
+        if not isinstance(job.affected_paths, list) or any(
+            not isinstance(path, str) or not path for path in job.affected_paths
+        ):
+            raise RuntimeError("Sync journal path metadata is malformed.")
+        if not isinstance(job.file_ids, list):
+            raise RuntimeError("Sync journal file metadata is malformed.")
+        for file_id in job.file_ids:
+            validate_repository_id(file_id)
     full_ids = {job.repository_id for job in full}
     sync_ids = {job.repository_id for job in sync}
     owners = {job.repository_id for job in publication}
@@ -46,7 +56,8 @@ def inspect_recovery_jobs(db):
     }
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description=__doc__).parse_args(argv)
     try:
         with SessionLocal() as db:
             report = inspect_recovery_jobs(db)

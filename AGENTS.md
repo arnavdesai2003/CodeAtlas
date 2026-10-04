@@ -1759,3 +1759,15 @@ Real local PostgreSQL observed no pending jobs. Seven offline regressions bring
 suite to 388 passing tests. No schema/rows/corpus/index/cache/settings/API changes
 or new quality/performance claim. Metadata snapshot is not dependency readiness,
 index integrity or cross-store atomicity. See docs/recovery-inspection.md.
+
+## Latest milestone: conservative recovery inspector inputs (2026-10-04)
+
+Inspector validates sync affected_paths as lists of nonempty strings and file_ids
+as positive int32 integer lists before counts/resume hints. Malformed JSON strings/
+mappings/null/elements fail with sanitized output, never inferred counts or repair.
+Empty lists valid. argparse --help and unsupported arguments exit before sessions;
+unsupported args exit 2. Four offline regressions bring suite to 392 passing tests.
+
+No live database inspection/mutation, services/settings/API changes or new quality/
+performance claims. Prior live no-pending-jobs observation is inherited. See
+docs/recovery-inspection.md; inspection never repairs journals automatically.
