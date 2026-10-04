@@ -1596,3 +1596,19 @@ Eight offline failure tests bring the suite to 333 passing tests. No metadata or
 schema writes, corpus/index/cache/settings/API changes or new performance/quality
 claims. This is session-lock release, not server crash/network-partition recovery
 or durable journal replay. Existing services remain running.
+
+## Latest milestone: abrupt sync process-exit coverage (2026-10-04)
+
+Six tests in tests/test_sync_process_recovery.py spawn independent processes with
+file-backed temporary SQLite metadata and real Python parsing. os._exit bypasses
+cleanup before metadata commit, delete/index/cache boundaries, and before/after
+final commit. Uncommitted metadata rolls back; committed pending targets/symbols
+survive with the old checkpoint. Fresh-session replay forbids Git/reparsing,
+preserves symbol IDs and verifies strict invalidation/final job deletion. Exit
+after final commit preserves the advanced checkpoint and removed job together.
+
+339 offline tests pass. Git/ES/Redis side effects mocked; SQLite advisory locks
+no-op. Separate live PostgreSQL probes cover coordination. This is not live
+cross-store verification or database/server crash recovery. No application/live
+data/services/settings changes, retrieval evaluation or performance claims.
+See docs/sync-recovery.md for boundaries and limits.

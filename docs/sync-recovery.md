@@ -207,3 +207,26 @@ wrapper delegates dictionary methods without implementing `Mapping`; checking
 the wrapper directly would reject valid responses. Plain dictionaries and all
 strict completion/acknowledgement checks remain supported. No tests were added
 or run for this compatibility correction.
+
+## Abrupt process-exit regression coverage (2026-10-04)
+
+`tests/test_sync_process_recovery.py` runs synchronization in independently spawned
+processes using file-backed temporary SQLite metadata, real Python parsing, and
+mocked Git/Elasticsearch/Redis boundaries. The child calls `os._exit(73)` at six
+points, bypassing context managers, rollback handlers and connection cleanup:
+
+- Before metadata commit: the original symbol and checkpoint survive, with no job.
+- Before external deletion, indexing or cache rotation: committed replacement
+  symbols and the pending target survive, while the checkpoint remains old.
+- Before final commit: uncommitted checkpoint advancement/job deletion roll back.
+- After final commit: the new checkpoint and job removal persist together.
+
+For the four pending-job cases, a fresh parent session resumes the recorded target
+without any Git access or reparsing. Deletion/indexing/strict invalidation are
+replayed, committed symbol IDs remain stable, and another session verifies final
+checkpoint advancement and job removal. These six tests bring the offline suite
+to 339 passing tests. This is durable local metadata/process-exit coverage, not
+PostgreSQL crash recovery or real cross-store side-effect verification. SQLite
+locks are no-ops here; use the separate
+[PostgreSQL coordination probes](writer-lock-verification.md) for real locks.
+No application behavior or live services/data/settings changed.

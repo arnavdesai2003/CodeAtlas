@@ -210,7 +210,8 @@ subsequently passed against real Elasticsearch/Redis. The
 [PostgreSQL writer coordination probe](docs/writer-lock-verification.md) passed
 shared/exclusive exclusion, commit persistence and exception release checks;
 its independent-process follow-up also passed normal/terminated owner release.
-333 offline tests now pass.
+Six [abrupt sync process-exit regressions](docs/sync-recovery.md#abrupt-process-exit-regression-coverage-2026-10-04)
+verify durable metadata and pending-job replay; 339 offline tests now pass.
 Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as
 metrics. The inherited hybrid Recall@10 baseline is **0.880**; preserve quality
