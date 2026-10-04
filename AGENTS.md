@@ -1376,3 +1376,13 @@ and absent usage stays supported. Existing missing-active-index fixture aligned
 with a complete stats response. No tests added or run under the recorded
 constraint; diff whitespace checks passed. No live cleanup/services/settings/
 corpus/cache changes or new metrics claimed. See index-generation-retention.
+
+## Latest milestone: retention alias metadata validation (2026-10-04)
+
+Generation inventory unwraps index metadata and requires mapping top-level/index
+entries plus mapping alias collections/details with nonempty string names.
+Malformed empty alias lists cannot imply an unaliased cleanup candidate; invalid
+metadata blocks inspection before eligibility. Filtered omitted alias fields
+remain supported, and reported aliases retain protection. No tests added or run
+under the recorded constraint; diff whitespace checks passed. No live cleanup,
+services/settings/corpus/cache changes or new metrics claimed.

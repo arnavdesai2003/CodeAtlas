@@ -63,10 +63,24 @@ def inspect_generations(db, client, *, policy=None, now=None,
     expressions = [legacy_name, f"{legacy_name}_generation_*", active]
     if job is not None:
         expressions.extend((job.source_index, job.staging_index))
-    metadata = dict(client.indices.get(
+    metadata = response_body(client.indices.get(
         index=sorted(set(expressions)), allow_no_indices=True, ignore_unavailable=True,
         expand_wildcards="all", filter_path="*.aliases,*.settings.index.uuid",
     ))
+    if not isinstance(metadata, Mapping):
+        raise RetentionBlocked("Index metadata inspection was incomplete.")
+    for name, entry in metadata.items():
+        aliases = entry.get("aliases", {}) if isinstance(entry, Mapping) else None
+        if (
+            not isinstance(name, str) or not name or name.strip() != name
+            or not isinstance(entry, Mapping) or not isinstance(aliases, Mapping)
+            or any(
+                not isinstance(alias, str) or not alias or alias.strip() != alias
+                or not isinstance(details, Mapping)
+                for alias, details in aliases.items()
+            )
+        ):
+            raise RetentionBlocked("Index metadata inspection was incomplete.")
     stats = {}
     if metadata:
         response = response_body(client.indices.stats(

@@ -164,6 +164,14 @@ existing exact identity/history checks to reconcile a deletion that may already
 have happened. No tests were added or run for this acknowledgement guard, and no
 live cleanup was performed.
 
+Index metadata is unwrapped and validated as a mapping rather than coerced with
+`dict()`. Index entries and alias collections/details must be mappings with
+nonempty string names. Malformed empty lists cannot imply an unaliased index;
+invalid metadata blocks inspection before eligibility is calculated. Omitted
+alias fields remain supported for filtered responses, while any reported alias
+protects its index as before. No tests were added or run for this guard, and no
+live cleanup was performed.
+
 Write-task inspection unwraps client response bodies and requires a mapping
 `nodes` collection with mapping node entries and task collections. Optional
 `node_failures`/`task_failures` must be empty lists when present; malformed falsey
