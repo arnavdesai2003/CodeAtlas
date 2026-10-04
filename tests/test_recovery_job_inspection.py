@@ -74,6 +74,7 @@ class RecoveryJobInspectionTests(unittest.TestCase):
         self.db.commit()
         report = command.inspect_recovery_jobs(self.db)
         self.assertEqual(report["sync_jobs"][0]["resume"], "POST /repositories/2/sync")
+        self.assertIsNone(report["sync_jobs"][0]["blocked_reason"])
         self.assertEqual(report["sync_jobs"][0]["affected_path_count"], 1)
         self.assertIn("--repository-id 1", report["full_index_jobs"][0]["resume"])
         self.assertNotIn("private", str(report))
@@ -87,7 +88,9 @@ class RecoveryJobInspectionTests(unittest.TestCase):
         report = command.inspect_recovery_jobs(self.db)
         self.assertTrue(report["publication_blocks_other_writers"])
         self.assertIsNone(report["sync_jobs"][0]["resume"])
+        self.assertEqual(report["sync_jobs"][0]["blocked_reason"], "pending_publication_blocks_sync")
         self.assertIsNone(report["full_index_jobs"][1]["resume"])
+        self.assertEqual(report["full_index_jobs"][1]["blocked_reason"], "another_repository_owns_publication")
         self.assertIn("--repository-id 1", report["publication_jobs"][0]["resume"])
 
     def test_conflicting_journals_do_not_offer_resume_commands(self):
@@ -98,6 +101,7 @@ class RecoveryJobInspectionTests(unittest.TestCase):
         self.assertEqual(report["conflicting_sync_and_full_repository_ids"], [1])
         self.assertIsNone(report["sync_jobs"][0]["resume"])
         self.assertIsNone(report["full_index_jobs"][0]["resume"])
+        self.assertEqual(report["full_index_jobs"][0]["blocked_reason"], "conflicting_sync_and_full_jobs")
 
     def test_unknown_publication_phase_withholds_owner_resume_hints(self):
         self.db.add(RepositoryFullIndexJob(repository_id=1, stats={}))
@@ -107,7 +111,20 @@ class RecoveryJobInspectionTests(unittest.TestCase):
         report = command.inspect_recovery_jobs(self.db)
         self.assertEqual(report["publication_jobs"][0]["phase"], "unknown")
         self.assertIsNone(report["publication_jobs"][0]["resume"])
+        self.assertEqual(report["publication_jobs"][0]["blocked_reason"], "unknown_publication_phase")
         self.assertIsNone(report["full_index_jobs"][0]["resume"])
+        self.assertEqual(report["full_index_jobs"][0]["blocked_reason"], "unknown_publication_phase")
+
+    def test_publication_owner_sync_conflict_is_explicit(self):
+        self.db.add(self.sync_job(1))
+        self.db.add(IndexPublicationJob(id=1, repository_id=1, phase="ready", source_index="source",
+                                       staging_index="stage", stats={}))
+        self.db.commit()
+        report = command.inspect_recovery_jobs(self.db)
+        self.assertEqual(report["conflicting_publication_and_sync_repository_ids"], [1])
+        self.assertEqual(report["publication_jobs"][0]["blocked_reason"], "publication_owner_has_pending_sync")
+        self.assertIsNone(report["publication_jobs"][0]["resume"])
+        self.assertIsNone(report["sync_jobs"][0]["resume"])
 
     def test_postgres_snapshot_is_read_only_before_journal_reads(self):
         db = Mock()

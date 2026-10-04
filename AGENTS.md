@@ -1784,3 +1784,16 @@ successful second-repository continuation and session cleanup; 395 tests pass.
 No live indexing/failure injection, data/settings/API changes or retrieval/quality/
 performance claim. Journals unchanged; output changes do not repair/discard work.
 See full-index-recovery docs for operator behavior and boundaries.
+
+## Latest milestone: explicit recovery blockers (2026-10-04)
+
+Recovery inspector reports blocked_reason for every journal beside resume hints:
+publication wait, another owner, sync/full conflict, unknown phase or publication
+owner with pending sync. Unblocked reasons null; blocked commands null. Root
+publication/sync conflict IDs expose owner conflicts even without a full job.
+One regression plus strengthened existing assertions verify reasons/commands;
+396 offline tests pass. See recovery-inspection reason table.
+
+Metadata reporting only; no live access/mutation, application writer/retrieval,
+services/settings/API changes or quality/performance claim. Reasons are snapshot
+observations, not dependency readiness or automatic reconciliation.

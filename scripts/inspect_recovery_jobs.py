@@ -31,26 +31,41 @@ def inspect_recovery_jobs(db):
     full_ids = {job.repository_id for job in full}
     sync_ids = {job.repository_id for job in sync}
     owners = {job.repository_id for job in publication}
-    resumable_owners = {job.repository_id for job in publication
-        if job.phase in {"building", "ready", "published"} and job.repository_id not in sync_ids}
     conflicts = sorted(full_ids & sync_ids)
+    publication_reasons = {job.repository_id: (
+        "publication_owner_has_pending_sync" if job.repository_id in sync_ids else
+        "unknown_publication_phase" if job.phase not in {"building", "ready", "published"} else None
+    ) for job in publication}
+    sync_reasons = {job.repository_id: (
+        "conflicting_sync_and_full_jobs" if job.repository_id in conflicts else
+        "pending_publication_blocks_sync" if publication else None
+    ) for job in sync}
+    full_reasons = {job.repository_id: (
+        "conflicting_sync_and_full_jobs" if job.repository_id in conflicts else
+        "another_repository_owns_publication" if owners and job.repository_id not in owners else
+        publication_reasons.get(job.repository_id)
+    ) for job in full}
     return {
         "status": "observed", "read_only": True,
         "snapshot": "repeatable_read" if dialect == "postgresql" else "offline_sqlite",
         "publication_blocks_other_writers": bool(publication),
         "conflicting_sync_and_full_repository_ids": conflicts,
+        "conflicting_publication_and_sync_repository_ids": sorted(owners & sync_ids),
         "sync_jobs": [{"repository_id": job.repository_id,
             "old_commit": job.old_commit, "target_commit": job.target_commit,
             "affected_path_count": len(job.affected_paths), "file_count": len(job.file_ids),
-            "resume": None if publication or job.repository_id in conflicts else
+            "blocked_reason": sync_reasons[job.repository_id],
+            "resume": None if sync_reasons[job.repository_id] else
                 f"POST /repositories/{job.repository_id}/sync"} for job in sync],
         "full_index_jobs": [{"repository_id": job.repository_id,
-            "resume": None if job.repository_id in conflicts or (owners and job.repository_id not in resumable_owners) else
+            "blocked_reason": full_reasons[job.repository_id],
+            "resume": None if full_reasons[job.repository_id] else
                 f".venv/bin/python -m scripts.index_elasticsearch --repository-id {job.repository_id}"}
             for job in full],
         "publication_jobs": [{"repository_id": job.repository_id, "phase": job.phase,
             "source_index": job.source_index, "staging_index": job.staging_index,
-            "resume": None if job.phase not in {"building", "ready", "published"} or job.repository_id in sync_ids else
+            "blocked_reason": publication_reasons[job.repository_id],
+            "resume": None if publication_reasons[job.repository_id] else
                 f".venv/bin/python -m scripts.index_elasticsearch --repository-id {job.repository_id}"}
             for job in publication],
     }

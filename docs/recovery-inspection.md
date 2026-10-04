@@ -44,3 +44,22 @@ error/exit 2 before database access. Four new offline regressions bring the suit
 to 392 passing tests, including malformed persisted JSON containers/elements and
 CLI access ordering. No live database inspection or mutation was needed for this
 follow-up; the earlier PostgreSQL observation remains a prior result.
+
+## Explicit blocked reasons
+
+Every job now has `blocked_reason` alongside `resume`. An unblocked metadata
+state uses null; a blocked state withholds the command and explains why:
+
+| Reason | Meaning |
+| --- | --- |
+| `pending_publication_blocks_sync` | Finish the owning publication before sync. |
+| `another_repository_owns_publication` | Full work must wait for the publication owner. |
+| `conflicting_sync_and_full_jobs` | Both journal kinds exist for this repository; inspect their history. |
+| `unknown_publication_phase` | Publication phase is unsupported; do not guess a retry. |
+| `publication_owner_has_pending_sync` | Publication and sync journals conflict on the owner. |
+
+The root report separately lists publication/sync owner conflicts, including
+cases without a full-index job. Reasons describe the metadata snapshot and do
+not establish dependency readiness. No automated reconciliation was added.
+An owner-conflict regression and strengthened existing checks bring the suite
+to 396 passing offline tests. This follow-up did not access or change live data.
