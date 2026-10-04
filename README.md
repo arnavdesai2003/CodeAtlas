@@ -50,6 +50,8 @@ currently parses Python only, using Tree-sitter. Elasticsearch indexing builds
 384-dimensional normalized embeddings and searchable symbol documents. The
 batch script adds the other five corpus repositories. These operations mutate
 the corpus; do not reindex just to run a benchmark.
+Batch ingestion reports failures and registration/clone conflicts with a nonzero
+exit; inspect metadata and clone state before retrying. `--help` does not ingest.
 
 Full indexing persists recovery jobs and stages complete Elasticsearch generations
 before atomically switching a search alias. It copies unaffected repositories
@@ -198,7 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **398 tests** (2026-10-04), mocks external services and
+The offline suite passes **402 tests** (2026-10-04), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 

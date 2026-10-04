@@ -278,3 +278,23 @@ PostgreSQL unique-constraint races, real Git/network behavior, filesystem races
 with external operators or distributed filesystem guarantees. It does not change
 URL canonicalization or automatically reconcile orphan clones. No production or
 live data/service/settings changes were made.
+
+## Batch ingestion command outcomes
+
+`scripts.batch_ingest --help` now exits before opening a session; unsupported
+arguments exit 2. Ordinary per-repository failures roll back the session and
+continue to the remaining configured repositories, then exit nonzero with a
+failure count. Messages identify exception types without printing raw dependency
+details. Session/setup errors also produce sanitized output and exit 1.
+
+Repository conflicts and internal `ValueError` failures are no longer reported
+as successful skips. A rerun containing already registered repositories therefore
+returns nonzero too; inspect metadata to distinguish existing registrations from
+occupied/orphan clone directories. The command does not adopt or remove orphan
+directories automatically. Inspect pending recovery jobs separately before
+resuming indexing/sync work.
+
+Four offline regressions cover help/argument ordering, failure continuation,
+conflict/internal-error classification and sanitized setup failure. All 402 offline
+tests pass; an actual `--help` invocation exited safely. No live ingestion,
+clone/metadata changes, settings/API restart or quality/performance claim.

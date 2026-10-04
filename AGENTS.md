@@ -1820,3 +1820,15 @@ commands retain --repository-id. Two regressions plus existing batch checks pass
 
 No live indexing/schema/data/settings/API changes or quality/performance claims.
 See full-index-recovery docs for scope and command selection.
+
+## Latest milestone: batch ingestion outcome safety (2026-10-04)
+
+batch_ingest parses args before sessions; help exits 0, unsupported args 2.
+Per-repository exceptions rollback/continue, print type/fixed guidance and produce
+nonzero failure count. Session/setup errors sanitized/exit 1. Conflicts/internal
+ValueErrors no longer successful skips; reruns with existing registrations also
+nonzero, requiring metadata/clone inspection. No orphan adoption/deletion added.
+Four regressions pass; 402 offline tests pass. Actual help invocation safe.
+
+No live ingestion/clone/metadata/settings/API changes or quality/performance claim.
+See sync-recovery docs for classification and operator limitations.
