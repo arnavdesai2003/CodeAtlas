@@ -75,8 +75,9 @@ class ApiAuthTests(unittest.TestCase):
     def test_health_remains_accessible_with_configured_key(self):
         with patch.object(routes.settings, "api_key", SecretStr("test-private-key")), \
              patch.object(routes, "engine"), patch.object(routes, "elasticsearch_client") as es, \
-             patch.object(routes, "redis_client"):
+             patch.object(routes, "redis_client") as redis:
             es.ping.return_value = True
+            redis.ping.return_value = True
             self.assertEqual(self.client.get("/health").status_code, 200)
 
     def test_key_is_redacted_by_settings_type(self):

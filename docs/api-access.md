@@ -22,6 +22,13 @@ bodies can return their existing errors first. A valid API key does not enable
 benchmark bypass: environment, opt-in and loopback restrictions still apply.
 Custom clients must supply the header when enabling a local key.
 
+Redis health requires the ping client's literal `True` acknowledgement of
+`PONG`. A negative/malformed return reports Redis unhealthy and overall HTTP 503,
+even without an exception. Exceptions still expose only their type, and public
+health access remains unchanged. The existing successful-health fixture now
+provides the explicit Redis acknowledgement. No tests were added or run for
+this follow-up.
+
 187 offline tests pass. Checks cover every search/repository operation failing
 closed outside local modes, wrong/missing keys, accepted exact-text searches,
 public health, secret redaction and unchanged benchmark bypass restrictions

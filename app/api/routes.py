@@ -93,10 +93,8 @@ def health_check():
 
     # Redis
     try:
-        redis_client.ping()
-
         services["redis"] = {
-            "status": "healthy"
+            "status": "healthy" if redis_client.ping() is True else "unhealthy"
         }
 
     except Exception as exc:

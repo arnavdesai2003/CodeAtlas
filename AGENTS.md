@@ -1476,3 +1476,13 @@ recovery correctness, retrieval quality or performance. Ingestion reservation/
 ambiguous-commit preservation reviewed without changes. No production changes,
 live services/settings/corpus/cache changes or new runtime metrics claimed.
 The recorded restriction on adding/running tests remains in effect.
+
+## Latest milestone: Redis health acknowledgement (2026-10-04)
+
+Health requires literal True from Redis ping before reporting it healthy;
+negative/malformed returns now produce unhealthy dependency/overall HTTP 503.
+Exception diagnostics remain sanitized to type and health remains public.
+Installed client source documents boolean PONG acknowledgement. Existing healthy
+fixture aligned; no tests added or run under the recorded constraint. Diff
+whitespace checks passed. No live services/settings/corpus/cache changes or
+new metrics claimed. See api-access.
