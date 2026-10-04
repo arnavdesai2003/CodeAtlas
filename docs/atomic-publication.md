@@ -271,3 +271,43 @@ malformed wrapped bodies still fail the same checks. This corrects the earlier
 container guards, which otherwise reject valid client responses. The shared
 refresh and incremental deletion validators use the same unwrapping. No tests
 were added or run for this compatibility correction.
+
+## Isolated publication protocol verification (2026-10-04)
+
+```sh
+.venv/bin/python -B -m scripts.verify_publication_protocol
+```
+
+The command uses real Elasticsearch and Redis responses with temporary SQLite
+metadata, deterministic 384-dimensional vectors and random scratch namespaces.
+It requires the normal search index for a before/after routing, UUID and count
+snapshot. It does not load models or modify the live corpus, normal alias,
+metadata database, cache generation or `.env`.
+
+Five check groups verify scratch alias migration, stale ID removal, unaffected
+vector copying/cache fencing, a real alias switch followed by an injected lost
+acknowledgement, an injected cache-finalization failure, empty replacement and
+real incremental delete/bulk/refresh completion responses. Both injected failures
+preserve journal state; retries finalize the active stage without another copy
+or switch. Full indexing leaves the scratch Git checkpoint unchanged.
+
+The command prints namespaces before writes. Cleanup validates every observed
+scratch index against recorded UUIDs before any exact-name deletion, blocks
+unknown identities/names or unexpected aliases, checks active write tasks and
+rechecks each UUID before deletion. It removes only private Redis keys and
+verifies scratch alias/index removal and unchanged normal routing/UUID/count/
+generation before success. Task inspection uses the existing technical preview
+API; inspection errors block cleanup. Abrupt termination, ambiguous operations
+or active tasks can leave scratch artifacts: inspect the printed namespaces
+before retrying. Never use wildcard deletion or alter normal aliases. The SQLite
+journal is ephemeral; this command is not a production recovery tool.
+
+Real local ES/Redis passed all five groups and removed scratch artifacts. Nine
+offline tests cover identity prevalidation/rechecking, unexpected aliases/tasks,
+exact deletion acknowledgement, failure cleanup and sanitized nonzero reporting.
+All 318 offline tests pass. Private Redis cleanup is attempted even if metadata
+rollback fails; unverifiable scratch indices remain for inspection. This verifies
+client protocols and replay logic with
+SQLite; it does not verify PostgreSQL advisory locks, cross-store atomicity,
+real model quality, capacity or faulted server transport. No application changes
+or API restarts were needed.

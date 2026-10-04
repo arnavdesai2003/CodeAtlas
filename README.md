@@ -205,6 +205,8 @@ passed 304 offline tests, including 29 new response, recovery and HTTP boundary
 regressions. This does not replace live protocol or retrieval verification.
 Subsequent [isolated Redis verification](docs/cache-consistency.md#isolated-redis-protocol-verification-2026-10-04)
 passed the live cache protocol checks and brought the offline suite to 309 tests.
+The [scratch publication protocol check](docs/atomic-publication.md#isolated-publication-protocol-verification-2026-10-04)
+subsequently passed against real Elasticsearch/Redis; 318 offline tests now pass.
 Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as
 metrics. The inherited hybrid Recall@10 baseline is **0.880**; preserve quality

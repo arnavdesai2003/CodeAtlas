@@ -44,3 +44,8 @@ exercised the real Lua protocol and glob matcher, including a post-rotation refi
 and four metacharacter/decoy cases. It adds five offline command failure/cleanup
 tests, bringing the suite to 309 passing tests. This follow-up does not add live
 Elasticsearch/PostgreSQL or retrieval/performance validation.
+
+The next [scratch publication protocol verification](atomic-publication.md#isolated-publication-protocol-verification-2026-10-04)
+passed against real Elasticsearch/Redis with temporary SQLite metadata and
+deterministic vectors. It adds nine offline safety/failure tests (318 total).
+PostgreSQL concurrency and model quality/performance remain outside this check.

@@ -1538,3 +1538,27 @@ Docker Desktop and existing containers started; initial sandbox connection faile
 unsandboxed smoke succeeded. Normal generation unchanged, private artifacts
 removed. No retrieval/model loads, live corpus/index/settings/API restarts or
 performance/quality claims. See cache-consistency for command and limits.
+
+## Latest milestone: isolated publication protocol verification (2026-10-04)
+
+Added scripts.verify_publication_protocol with real ES/Redis, temporary SQLite
+metadata, deterministic vectors and random scratch namespaces. Five check groups
+passed: alias migration/stale ID removal/unaffected vector copy/cache fence,
+lost alias acknowledgement recovery without rebuild, published cache-failure
+recovery without rebuild, empty replacement/checkpoint preservation and real
+incremental delete/bulk/refresh responses. Explicit provisioning client injection
+avoids captured default clients when using supplied scratch services.
+
+Cleanup prevalidates recorded UUIDs, blocks unexpected aliases/names/unverified
+identities or active write tasks, rechecks UUIDs and deletes exact scratch names.
+Private Redis cleanup and scratch alias removal verified. Normal routing/UUID/
+count/generation unchanged. Print namespaces before access; failed/abrupt runs
+can leave artifacts, and SQLite journals are ephemeral. This is not a production
+recovery/retention tool. See atomic-publication for workflow and limitations.
+
+Private Redis cleanup still runs after metadata rollback failure; unverifiable
+scratch indices remain for inspection. Nine new offline safety/failure tests
+bring the suite to 318 passing tests.
+No application code/live corpus/normal routing/cache/settings/API changes or
+model loads/evaluation/performance claims. PostgreSQL coordination is not tested
+by this SQLite smoke. Existing Docker services remain running. Diff checks pass.
