@@ -148,12 +148,14 @@ def invalidate_search_cache(*, strict: bool = False) -> int:
             raise
         return 0
 
-    if previous is None:
+    if not isinstance(previous, str) or not previous:
         return 0
+    # Tokens are opaque strings; never interpret an old token as a Redis glob.
+    literal_previous = "".join("\\" + char if char in "\\*?[]" else char for char in previous)
     deleted = 0
     batch = []
     try:
-        for key in redis_client.scan_iter(match=f"{ENTRY_PREFIX}{previous}:*", count=256):
+        for key in redis_client.scan_iter(match=f"{ENTRY_PREFIX}{literal_previous}:*", count=256):
             batch.append(key)
             if len(batch) == 256:
                 deleted += redis_client.delete(*batch)

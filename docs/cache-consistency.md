@@ -105,3 +105,10 @@ coalescing. The write helper also rejects invalid/empty tokens before contacting
 Redis. Valid tokens remain opaque strings; no token-format migration is added.
 Corrupt JSON with a valid token still permits fenced refill. No tests were added
 or run and no live Redis entries were changed for this guard.
+
+Best-effort cleanup escapes Redis glob metacharacters in the old generation
+token before scanning its entry prefix. Opaque tokens cannot expand the scan to
+other generations. Missing/invalid old tokens skip physical cleanup after the
+successful rotation; strict invalidation still depends on rotation, not cleanup.
+Random generated tokens, TTLs and fencing remain unchanged. No tests were added
+or run and no live Redis entries were changed for this cleanup guard.

@@ -1425,6 +1425,7 @@ misses and retain healthy conditional refill; normal serialized writes remain
 unchanged. No full row schema validation, key migration, rotation or flush added.
 No tests added or run under the recorded constraint; diff whitespace checks
 passed. No live Redis/services/settings/corpus changes or new metrics claimed.
+
 See cache-consistency.
 
 ## Latest milestone: Redis generation reply validation (2026-10-04)
@@ -1434,5 +1435,14 @@ generation tokens. Invalid replies return unknown-generation misses, keeping
 retrieval independent and disabling cache fill/coalescing. Cache writes reject
 invalid/empty tokens before Redis access. Valid opaque tokens and corrupt-JSON
 generation-bound refill remain supported; decoded Redis configuration unchanged.
+No tests added or run under the recorded constraint; diff whitespace checks
+passed. No live Redis/services/settings/corpus changes or new metrics claimed.
+
+## Latest milestone: literal cache-cleanup generation matching (2026-10-04)
+
+Best-effort invalidation cleanup escapes Redis glob metacharacters in old opaque
+generation tokens before scanning. Tokens cannot broaden physical cleanup to
+other generations. Missing/invalid old tokens skip cleanup after successful
+rotation; strict rotation/fencing and normal random tokens remain unchanged.
 No tests added or run under the recorded constraint; diff whitespace checks
 passed. No live Redis/services/settings/corpus changes or new metrics claimed.
