@@ -224,3 +224,11 @@ not a checksum of document content.
 Offline tests cover partial source and ready counts, malformed values and
 successful recovery. Real isolated checks verified empty, populated and filtered
 counts; the scratch index was removed. No live shard outage was induced.
+
+Staging-copy responses also require explicit `timed_out=false`, an empty failure
+list and integer zero version conflicts. Both `total` and `created` must be
+nonnegative integers matching the checked source count; booleans and floats are
+rejected even when numerically equal. Missing/malformed completion fields stop
+before target indexing or alias publication, leaving the building journal for a
+fresh-stage retry. Existing success/count-mismatch fixtures were aligned with
+this response contract; no tests were added or run for this follow-up.

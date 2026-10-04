@@ -3,6 +3,7 @@
 The caller holds the exclusive corpus advisory lock. A singleton database job
 keeps all other cooperating writers blocked across crashes and retries.
 """
+from collections.abc import Mapping
 from uuid import uuid4
 
 from app.db.models import (
@@ -18,7 +19,14 @@ from app.search.generation_lifecycle import (
 
 
 def _check_response(response, operation: str) -> None:
-    if response.get("timed_out") or response.get("failures") or response.get("version_conflicts"):
+    failures = response.get("failures") if isinstance(response, Mapping) else None
+    conflicts = response.get("version_conflicts") if isinstance(response, Mapping) else None
+    if (
+        not isinstance(response, Mapping)
+        or response.get("timed_out") is not False
+        or not isinstance(failures, list) or failures
+        or type(conflicts) is not int or conflicts != 0
+    ):
         raise RuntimeError(f"Elasticsearch {operation} was incomplete; retry full indexing.")
 
 
@@ -107,7 +115,12 @@ def publish_repository_index(db, repository_id: int) -> dict:
                 wait_for_completion=True,
             )
             _check_response(response, "staging copy")
-            if response.get("total") != expected_copied or response.get("created") != expected_copied:
+            total = response.get("total")
+            created = response.get("created")
+            if (
+                type(total) is not int or total < 0 or total != expected_copied
+                or type(created) is not int or created < 0 or created != expected_copied
+            ):
                 raise RuntimeError("Elasticsearch staging copy count did not match the source.")
             result = engine._write_repository_index(db, repository_id, index_name=job.staging_index)
             expected_symbols = db.query(CodeSymbol).filter_by(repository_id=repository_id).count()

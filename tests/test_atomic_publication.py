@@ -152,7 +152,10 @@ class AtomicPublicationTests(unittest.TestCase):
         self.es.indices.get_alias.side_effect = get_alias
         self.es.indices.update_aliases.side_effect = swap
         self.es.count.side_effect = lambda **kwargs: {"count": 2 if "query" in kwargs else 3, "_shards": {"failed": 0}}
-        self.es.reindex.return_value = {"total": 2, "created": 2}
+        self.es.reindex.return_value = {
+            "timed_out": False, "failures": [], "version_conflicts": 0,
+            "total": 2, "created": 2,
+        }
 
     def publish(self, db=None):
         return engine.index_repository_in_elasticsearch(db or self.db, self.repo.id)
@@ -342,7 +345,10 @@ class AtomicPublicationTests(unittest.TestCase):
             self.assertEqual(row.index_uuid, "omit")
 
     def test_copy_count_mismatch_keeps_old_index(self):
-        self.es.reindex.return_value = {"total": 2, "created": 1}
+        self.es.reindex.return_value = {
+            "timed_out": False, "failures": [], "version_conflicts": 0,
+            "total": 2, "created": 1,
+        }
         with self.assertRaisesRegex(RuntimeError, "copy count"):
             self.publish()
         self.assertIsNone(self.alias)

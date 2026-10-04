@@ -1257,3 +1257,14 @@ tests added or tests run, preserving the prior milestone's recorded constraint.
 Diff whitespace checks passed; no production behavior, live services, corpus,
 cache or settings changed. The previously reported 275-test result predates the
 strict deletion change and is not a validation claim for either follow-up.
+
+## Latest milestone: strict staging-copy completion (2026-10-04)
+
+Full publication now requires explicit non-timeout staging-copy completion, an
+empty failure list and integer zero version conflicts. Total/created counts must
+be nonnegative integers matching the checked source count; boolean/float numeric
+equivalence no longer passes. Invalid responses stop before target indexing and
+alias publication, retaining building work for fresh-stage retry. Existing
+success/count-mismatch fixtures aligned; no tests added or run under the recorded
+constraint. Diff whitespace checks passed. No live publication, corpus, cache,
+settings/API changes or new quality/performance claim. See atomic-publication.

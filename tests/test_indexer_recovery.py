@@ -507,7 +507,10 @@ class IndexerRecoveryTests(unittest.TestCase):
             return {"acknowledged": True}
         es.indices.get_alias.side_effect = get_alias
         es.indices.update_aliases.side_effect = update_aliases
-        es.reindex.return_value = {"total": 0, "created": 0}
+        es.reindex.return_value = {
+            "timed_out": False, "failures": [], "version_conflicts": 0,
+            "total": 0, "created": 0,
+        }
         es.count.side_effect = lambda **kwargs: {"count": 0 if "query" in kwargs
             else self.db.query(CodeSymbol).count(), "_shards": {"failed": 0}}
 
