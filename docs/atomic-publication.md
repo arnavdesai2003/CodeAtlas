@@ -311,3 +311,27 @@ client protocols and replay logic with
 SQLite; it does not verify PostgreSQL advisory locks, cross-store atomicity,
 real model quality, capacity or faulted server transport. No application changes
 or API restarts were needed.
+
+## Ready-stage process-exit coverage (2026-10-04)
+
+`tests/test_publication_process_recovery.py` starts from a committed ready journal
+in file-backed temporary SQLite. Each independent child exits via `os._exit(74)`,
+bypassing exception handlers and cleanup. A disk-backed fake records alias and
+cache side effects so the parent observes them after the child exits. Elasticsearch
+and Redis are mocked; the production publication and lifecycle state transitions
+run unchanged.
+
+Seven boundaries cover exit before the alias switch, after the switch before its
+acknowledgement, before published metadata commit, before/after cache rotation,
+and before/after final journal deletion commit. A fresh parent session resumes
+pending work on the same stage without recreation, copy or symbol rewriting.
+The alias switches exactly once; an already performed cache rotation is repeated
+on retry. Published/retired lifecycle timestamps survive finalization retries.
+After final commit, both journals remain absent; the Git checkpoint stays unchanged
+through every case. The full offline suite passes 346 tests.
+
+These tests establish process-exit metadata/replay behavior for ready and published
+stages. They do not exercise building-stage interruption, real service side effects,
+PostgreSQL/server crashes, network partitions or filesystem power-loss durability.
+Separate real-service protocol and PostgreSQL lock probes cover their own scopes.
+No application, live data, settings or running services changed in this milestone.

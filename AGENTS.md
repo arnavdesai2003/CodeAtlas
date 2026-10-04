@@ -1612,3 +1612,19 @@ no-op. Separate live PostgreSQL probes cover coordination. This is not live
 cross-store verification or database/server crash recovery. No application/live
 data/services/settings changes, retrieval evaluation or performance claims.
 See docs/sync-recovery.md for boundaries and limits.
+
+## Latest milestone: ready-stage publication process-exit coverage (2026-10-04)
+
+Seven tests in tests/test_publication_process_recovery.py start from committed
+ready journals with disk SQLite and a disk-backed fake alias/cache side-effect
+record. Spawned owners exit without cleanup before/after alias switching,
+published metadata commit, cache rotation and final journal deletion commit.
+Fresh parent sessions resume the same stage without create/copy/symbol writes;
+exactly one alias switch, repeat cache rotation after interrupted finalization,
+stable lifecycle timestamps and unchanged Git checkpoint verified. After final
+commit both journal deletions persist. 346 offline tests pass.
+
+External services mocked; production publication/lifecycle code unchanged. No
+live data/services/settings/API changes or quality/performance claims. This
+covers ready/published phases, not building interruption, PostgreSQL/server
+crashes, partitions or power-loss durability. See atomic-publication docs.
