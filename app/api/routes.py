@@ -3,7 +3,7 @@ from elasticsearch import ApiError
 from elastic_transport import TransportError
 from app.search.errors import IncompleteSearchError
 
-from fastapi import APIRouter, Header, Request, Response
+from fastapi import APIRouter, Header, Path, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
@@ -25,6 +25,7 @@ from app.indexer.errors import (
 )
 from app.db.models import Repository
 from app.indexer.incremental import sync_repository, RepositorySyncInProgress
+from app.indexer.locking import MAX_REPOSITORY_ID
 from app.api.auth import require_api_key
 
 
@@ -230,7 +231,7 @@ def search_code(
     "/repositories/{repository_id}/sync"
 )
 def synchronize_repository(
-    repository_id: int,
+    repository_id: int = Path(..., ge=1, le=MAX_REPOSITORY_ID),
     db: Session = Depends(get_db),
 ):
     try:

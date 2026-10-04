@@ -1717,3 +1717,17 @@ Four offline HTTP regressions bring the suite to 371 passing tests, including
 otherwise valid push payloads, nesting/root constants and auth precedence. No
 retrieval/index/ranking change, live probe/webhook, restart, data/settings change
 or performance/quality claim. See API-access/webhook docs for behavior and scope.
+
+## Latest milestone: repository writer ID validation (2026-10-04)
+
+Shared writer context rejects non-int/bool/zero/negative/oversized repository IDs
+before lock connection or metadata lookup. Range 1..2147483647 matches PostgreSQL
+int32 keys and avoids collision with corpus -1. API sync Path validation returns
+422 for invalid values and documents bounds; valid missing IDs retain 404.
+Five offline regressions verify both boundaries and unchanged valid lock keys;
+376 offline tests pass. Real PostgreSQL four-group coordination probe rerun passed
+using read-only metadata and temporary locks.
+
+No schema/rows/corpus/index/cache/settings/API restart or retrieval/ranking changes,
+quality evaluation or performance claims. Maintenance internal corpus key unchanged.
+See writer-lock-verification/API-access docs for behavior and scope.

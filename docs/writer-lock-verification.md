@@ -56,3 +56,19 @@ read-only metadata scope apply. This proves exclusion and session-lock release
 across these local processes; it does not simulate a PostgreSQL/server crash,
 network partition, metadata/index publication interruption or durable job replay.
 No live rows/schema, corpus/index/cache, settings or API processes were changed.
+
+## Repository ID boundary (2026-10-04)
+
+The shared repository writer context now accepts only Python integers from 1
+through 2,147,483,647, before any lock connection or metadata lookup. Booleans,
+nonintegers, zero/negative IDs and oversized keys raise `ValueError`. This applies
+to cooperating sync/full-publication library callers, including SQLite tests;
+maintenance still uses its separate internal corpus key. The API sync path
+documents the same bounds and rejects invalid IDs with HTTP 422 before invoking
+synchronization. Valid missing repository IDs retain their existing HTTP 404.
+
+Five offline regressions verify API/schema boundaries, absence of service/lock
+work for invalid IDs and unchanged corpus/repository keys at valid extremes.
+All 376 offline tests pass. The real PostgreSQL four-group coordination probe
+was rerun successfully with read-only metadata and temporary locks. No rows,
+schema, corpus/index/cache, settings or existing API processes changed.

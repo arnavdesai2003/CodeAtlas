@@ -42,6 +42,13 @@ dependencies healthy. All 371 offline tests pass, including the signed webhook
 JSON-constant checks. No live dependency probe, API restart or settings/data change
 was performed for this milestone.
 
+`POST /repositories/{repository_id}/sync` now requires a positive int32 ID
+(1–2,147,483,647). Invalid path values return HTTP 422 before synchronization;
+the range is included in OpenAPI. Valid IDs keep existing authentication and
+not-found/conflict/recovery behavior. The
+[writer boundary](writer-lock-verification.md#repository-id-boundary-2026-10-04)
+also rejects invalid keys from non-HTTP cooperating callers before lock work.
+
 187 offline tests pass. Checks cover every search/repository operation failing
 closed outside local modes, wrong/missing keys, accepted exact-text searches,
 public health, secret redaction and unchanged benchmark bypass restrictions

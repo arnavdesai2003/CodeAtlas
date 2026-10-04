@@ -176,6 +176,27 @@ class CacheTests(unittest.TestCase):
 
 
 class ApiTests(unittest.TestCase):
+    def test_invalid_sync_ids_reject_before_service(self):
+        with patch.object(routes, "sync_repository") as sync:
+            for value in ("0", "-1", "-2147483648", "2147483648", "999999999999999999999999", "1.5", "true"):
+                with self.subTest(value=value):
+                    response = self.client.post(f"/repositories/{value}/sync")
+                    self.assertEqual(response.status_code, 422)
+            sync.assert_not_called()
+
+    def test_sync_id_boundaries_preserve_service_arguments(self):
+        with patch.object(routes, "sync_repository", return_value={"changed": False}) as sync:
+            for repository_id in (1, 2147483647):
+                with self.subTest(repository_id=repository_id):
+                    response = self.client.post(f"/repositories/{repository_id}/sync")
+                    self.assertEqual(response.status_code, 200)
+                    self.assertEqual(sync.call_args.kwargs["repository_id"], repository_id)
+
+    def test_sync_id_bounds_are_documented_in_openapi(self):
+        operation = self.client.app.openapi()["paths"]["/repositories/{repository_id}/sync"]["post"]
+        schema = next(item["schema"] for item in operation["parameters"] if item["name"] == "repository_id")
+        self.assertEqual((schema["minimum"], schema["maximum"]), (1, 2147483647))
+
     def test_search_query_boundary_preserves_exact_text(self):
         query = "  " + "é" * 4092 + "\n "
         result = self.client.post("/search", json={"query": query})
