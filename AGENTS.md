@@ -1562,3 +1562,21 @@ bring the suite to 318 passing tests.
 No application code/live corpus/normal routing/cache/settings/API changes or
 model loads/evaluation/performance claims. PostgreSQL coordination is not tested
 by this SQLite smoke. Existing Docker services remain running. Diff checks pass.
+
+## Latest milestone: PostgreSQL writer coordination verification (2026-10-04)
+
+Added scripts.verify_writer_locks using real production advisory lock contexts,
+three metadata sessions and unregistered random int32 repository IDs. Pending
+jobs/registered IDs/unsupported dialects block probing; busy corpus fails without
+waiting. Four live groups passed: shared overlap and same-repository exclusion,
+publisher/maintenance exclusion across metadata commits, partial acquisition
+cleanup and writer/publisher/maintenance exception release. No schema or metadata
+writes. Actual corpus locks briefly exclude cooperating writers; use idle writers.
+See docs/writer-lock-verification.md for scope and limitations.
+
+Seven offline guard/failure tests bring the suite to 325 passing tests. Unexpected
+backend errors are not treated as contention; failed preflight closes sessions,
+CLI errors are sanitized/nonzero. No application behavior, corpus/index/cache,
+settings/API changes, retrieval evaluation or performance claims. Existing Docker
+services remain running. Coordination does not establish cross-store atomicity
+or fence legacy/external writers.
