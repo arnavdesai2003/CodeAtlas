@@ -164,6 +164,13 @@ existing exact identity/history checks to reconcile a deletion that may already
 have happened. No tests were added or run for this acknowledgement guard, and no
 live cleanup was performed.
 
+Reviewed plans must include exactly both policy fields, `min_age_hours` and
+`keep_retired`. Apply rejects missing or unknown policy fields rather than
+silently substituting defaults. Generated plans already include both values;
+normal inspection/plan creation retains its default policy. This validation
+occurs before maintenance locking, inventory requests or deletion. No tests were
+added or run for this plan-format guard, and no live cleanup was performed.
+
 Index metadata is unwrapped and validated as a mapping rather than coerced with
 `dict()`. Index entries and alias collections/details must be mappings with
 nonempty string names. Malformed empty lists cannot imply an unaliased index;

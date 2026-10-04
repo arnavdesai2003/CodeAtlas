@@ -216,9 +216,12 @@ def _validate_plan(plan, *, legacy_name, alias_name):
         raise RetentionBlocked("Unsupported cleanup plan format.")
     if plan.get("legacy_name") != legacy_name or plan.get("alias_name") != alias_name:
         raise RetentionBlocked("Cleanup plan belongs to another index namespace.")
+    reviewed_policy = plan.get("policy")
+    if not isinstance(reviewed_policy, dict) or set(reviewed_policy) != {"min_age_hours", "keep_retired"}:
+        raise RetentionBlocked("Cleanup plan requires an explicit complete retention policy.")
     try:
-        policy = RetentionPolicy(**plan["policy"])
-    except (KeyError, TypeError):
+        policy = RetentionPolicy(**reviewed_policy)
+    except TypeError:
         raise RetentionBlocked("Cleanup plan has an invalid retention policy.") from None
     candidates = plan.get("candidates")
     if not isinstance(candidates, list):

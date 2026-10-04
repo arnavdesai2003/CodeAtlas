@@ -1386,3 +1386,12 @@ metadata blocks inspection before eligibility. Filtered omitted alias fields
 remain supported, and reported aliases retain protection. No tests added or run
 under the recorded constraint; diff whitespace checks passed. No live cleanup,
 services/settings/corpus/cache changes or new metrics claimed.
+
+## Latest milestone: explicit reviewed retention policy (2026-10-04)
+
+Cleanup plans require exactly min_age_hours and keep_retired policy fields;
+missing values no longer silently use defaults during apply. Generated plans
+already provide both fields and normal inspection defaults remain unchanged.
+Invalid policies stop before maintenance locking/inventory/deletion. No tests
+added or run under the recorded constraint; diff whitespace checks passed. No
+live cleanup/services/settings/corpus/cache changes or new metrics claimed.
