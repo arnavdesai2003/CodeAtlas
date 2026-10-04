@@ -181,3 +181,12 @@ containers raise the existing incomplete-refresh error before cache invalidation
 or checkpoint advancement, retaining the committed sync job for retry. This
 response-shape guard also applies to full-publication refreshes. No tests were
 added or run for this follow-up.
+
+When a writer provisions a missing symbol index, creation must return a mapping
+with literal `acknowledged=true` and `shards_acknowledged=true` before writes
+continue. Missing, malformed or unacknowledged responses raise for retry; the
+possibly created index is preserved. Retry follows the existing index-existence
+check rather than deleting/recreating an ambiguous outcome. This also applies
+to initial legacy provisioning during full publication; it does not validate an
+existing index's mapping or add a new reconciliation protocol. No tests were
+added or run for this acknowledgement guard.

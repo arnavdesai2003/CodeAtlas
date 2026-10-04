@@ -1311,3 +1311,13 @@ back. Only NotFoundError retains legacy fallback. Per-request concrete generatio
 pinning and valid routing remain unchanged. Existing success fixtures aligned;
 no tests added or run under the recorded constraint. Diff whitespace checks
 passed. No live routing/services/settings/corpus/cache changes or new metrics.
+
+## Latest milestone: symbol-index provisioning acknowledgement (2026-10-04)
+
+Missing symbol-index creation now requires mapping responses with both literal
+acknowledged=true and shards_acknowledged=true before writers continue. Invalid
+or unacknowledged responses raise for retry without deleting the possibly created
+index. Existing-index retry behavior remains; this does not validate mappings or
+reconcile missing published generations. Initial legacy provisioning uses the
+same check. No tests added or run under the recorded constraint; diff whitespace
+checks passed. No live services/routing/settings/corpus/cache changes or metrics.

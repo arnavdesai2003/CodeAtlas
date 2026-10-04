@@ -160,7 +160,7 @@ def create_symbol_index(
     if client.indices.exists(index=index_name):
         return
 
-    client.indices.create(
+    response = client.indices.create(
         index=index_name,
         settings={
             "number_of_shards": 1,
@@ -239,6 +239,12 @@ def create_symbol_index(
             }
         },
     )
+    if (
+        not isinstance(response, Mapping)
+        or response.get("acknowledged") is not True
+        or response.get("shards_acknowledged") is not True
+    ):
+        raise RuntimeError("Elasticsearch index creation was not acknowledged; retry indexing.")
 
 
 # ---------------------------------------------------------------------
