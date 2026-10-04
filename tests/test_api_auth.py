@@ -10,6 +10,19 @@ from app.api import routes
 
 
 class ApiAuthTests(unittest.TestCase):
+    def test_nonpositive_redis_ack_reports_unhealthy_without_raw_payload(self):
+        with patch.object(routes, "engine"), \
+             patch.object(routes, "elasticsearch_client") as es, \
+             patch.object(routes, "redis_client") as redis:
+            es.ping.return_value = True
+            for value in (False, None, 1, "private-ping-payload"):
+                with self.subTest(value=value):
+                    redis.ping.return_value = value
+                    response = self.client.get("/health")
+                    self.assertEqual(response.status_code, 503)
+                    self.assertEqual(response.json()["dependencies"]["redis"], {"status": "unhealthy"})
+                    self.assertNotIn("private-ping-payload", response.text)
+
     def test_openapi_describes_api_key_only_for_protected_routes(self):
         with patch.object(routes.settings, "api_key", SecretStr("private-schema-secret")):
             schema = self.client.get("/openapi.json").json()

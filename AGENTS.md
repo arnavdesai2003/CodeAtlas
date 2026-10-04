@@ -5,6 +5,10 @@ status before work; preserve unrelated edits. Continue local, reversible,
 testable work autonomously. Never fabricate metrics or change retrieval solely
 to improve latency. Do not add infrastructure without an evidenced need.
 
+The user superseded the earlier restriction on adding/running tests on
+2026-10-04. Continue authorized offline validation autonomously; historical
+milestone notes saying tests were not run describe those earlier checkpoints.
+
 ## Architecture and directories
 
 - `app/main.py`: FastAPI app; startup initializes PostgreSQL tables.
@@ -1497,3 +1501,22 @@ compatibility remains through inheritance; valid routing, legacy fallback,
 transport behavior and ranking unchanged. Search request bounds reviewed without
 changes. No tests added or run under the recorded constraint; diff whitespace
 checks passed. No live services/settings/corpus/cache changes or new metrics.
+
+## Latest milestone: offline hardening regression validation (2026-10-04)
+
+User superseded the recorded test restriction. Baseline 275 offline tests passed;
+29 new regressions bring the final suite to 304 passing tests. Actual installed
+ObjectApiResponse wrappers are exercised across routing/publication/deletion;
+temporary SQLite verifies sync checkpoints/IDs and publication/retention journals
+remain retryable. Coverage includes malformed completion/acknowledgements,
+missing generation write guards, cleanup task/statistics/alias/policy blockers,
+JSON ambiguity, cache token fallback/refill/escaped scans, sanitized HTTP errors,
+Redis health and real deeply nested signed webhook JSON. Existing stale-fill
+interleaving tests also pass. See docs/hardening-validation.md for scope/limits.
+
+Initial new fixture attempted a sandbox-blocked local connection because a
+default client escaped mocking; corrected explicit client injection. Initial
+nested JSON fixture did not reach decoder capacity; replaced with 10,000 levels
+and verified specific JSON rejection. Final suite passes; no application changes
+needed. No model downloads/live services/corpus/cache/settings/API changes,
+retrieval evaluation or performance claims. Diff whitespace checks passed.

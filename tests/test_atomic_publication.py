@@ -9,7 +9,7 @@ os.environ.update(
     HF_HUB_OFFLINE="1",
 )
 from elasticsearch import NotFoundError
-from elastic_transport import ApiResponseMeta, NodeConfig
+from elastic_transport import ApiResponseMeta, NodeConfig, ObjectApiResponse
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from app.db.database import Base
@@ -17,6 +17,13 @@ from app.db.models import Repository, CodeFile, CodeSymbol, RepositoryFullIndexJ
 from app.search import engine, publication
 from app.search.indexes import alias_target
 from app.indexer.locking import RepositorySyncInProgress, repository_sync_lock
+from app.search.errors import InvalidSearchResponseError
+
+
+def wrapped(body):
+    return ObjectApiResponse(body=body, meta=ApiResponseMeta(
+        200, "1.1", {}, 0, NodeConfig("http", "localhost", 9200),
+    ))
 
 
 def missing_alias():
@@ -25,6 +32,51 @@ def missing_alias():
 
 
 class RoutingTests(unittest.TestCase):
+    def test_wrapped_alias_response_pins_a_real_client_target(self):
+        client = Mock()
+        client.indices.get_alias.return_value = wrapped({"generation": {"aliases": {"search": {}}}})
+        self.assertEqual(alias_target(client, alias_name="search"), "generation")
+        client.indices.get_alias.assert_called_once_with(name="search")
+
+    def test_malformed_aliases_raise_typed_errors_instead_of_selecting_targets(self):
+        client = Mock()
+        for body in (None, ["generation"], {"": {"aliases": {"search": {}}}},
+                     {"generation": None}, {"generation": {"aliases": []}},
+                     {"generation": {"aliases": {"other": {}}}},
+                     {"generation": {"aliases": {"search": None}}}):
+            for response in (body, wrapped(body)):
+                with self.subTest(body=body, wrapped=isinstance(response, ObjectApiResponse)):
+                    client.indices.get_alias.return_value = response
+                    with self.assertRaises(InvalidSearchResponseError):
+                        alias_target(client, alias_name="search")
+
+    def test_missing_generation_blocks_incremental_writes_without_recreation(self):
+        provision = engine.create_symbol_index
+        with patch.object(engine, "elasticsearch_client") as es, \
+             patch.object(engine, "resolve_search_index", return_value="missing_generation"), \
+             patch.object(engine, "bulk") as bulk, \
+             patch.object(engine, "create_symbol_index", side_effect=lambda **kwargs: provision(es, **kwargs)):
+            es.indices.exists.return_value = False
+            for operation in (lambda: engine.delete_paths_from_elasticsearch(1, ["main.py"]),
+                              lambda: engine.index_files_in_elasticsearch(Mock(), [1])):
+                with self.assertRaisesRegex(RuntimeError, "generation is missing"):
+                    operation()
+            es.indices.create.assert_not_called()
+            es.options.return_value.delete_by_query.assert_not_called()
+            bulk.assert_not_called()
+
+    def test_bootstrap_requires_real_boolean_acknowledgements_and_preserves_index(self):
+        client = Mock()
+        client.indices.exists.return_value = False
+        for body in ({}, None, {"acknowledged": 1, "shards_acknowledged": True},
+                     {"acknowledged": True, "shards_acknowledged": "true"}):
+            client.indices.create.return_value = wrapped(body)
+            with self.subTest(body=body), self.assertRaisesRegex(RuntimeError, "not acknowledged"):
+                engine.create_symbol_index(client, index_name=engine.INDEX_NAME)
+        client.indices.delete.assert_not_called()
+        client.indices.create.return_value = wrapped({"acknowledged": True, "shards_acknowledged": True})
+        engine.create_symbol_index(client, index_name=engine.INDEX_NAME)
+
     def test_close_search_connections_preserves_hits_queries_and_generation(self):
         hit = {"_score": 1.5, "_source": {
             "repository": "repo", "path": "m.py", "name": "f",
@@ -102,6 +154,84 @@ class RoutingTests(unittest.TestCase):
 
 
 class AtomicPublicationTests(unittest.TestCase):
+    def test_full_publication_accepts_real_client_wrappers_through_finalization(self):
+        for endpoint in (self.es.indices.get_alias, self.es.indices.create,
+                         self.es.indices.get_settings, self.es.indices.get_mapping,
+                         self.es.count, self.es.reindex, self.es.indices.refresh,
+                         self.es.indices.update_aliases):
+            effect, result = endpoint.side_effect, endpoint.return_value
+            endpoint.side_effect = lambda *args, _effect=effect, _result=result, **kwargs: wrapped(
+                _effect(*args, **kwargs) if _effect is not None else _result)
+        result = self.publish()
+        self.assertEqual(result["documents_total"], 3)
+        self.assertEqual(self.alias, result["index"])
+        self.assertIsNone(self.journal())
+        self.invalidate.assert_called_once_with(strict=True)
+
+    def test_malformed_copy_keeps_building_journal_without_target_writes(self):
+        good = {"timed_out": False, "failures": [], "version_conflicts": 0, "total": 2, "created": 2}
+        bodies = [None, {}, *[{**good, field: value} for field, value in (
+            ("timed_out", 0), ("failures", None), ("failures", {}),
+            ("version_conflicts", False), ("total", 2.0), ("created", 2.0),
+        )]]
+        for body in bodies:
+            with self.subTest(body=body):
+                self.es.reindex.return_value = wrapped(body)
+                with self.assertRaises(RuntimeError):
+                    self.publish()
+                self.assertEqual(self.journal()[0], "building")
+                self.write.assert_not_called()
+                self.es.indices.update_aliases.assert_not_called()
+                self.invalidate.assert_not_called()
+        self.es.reindex.return_value = wrapped(good)
+        self.assertTrue(self.publish()["resumed"])
+        self.assertIsNone(self.journal())
+
+    def test_malformed_swap_ack_retries_active_stage_without_rebuilding(self):
+        def ambiguous_swap(**kwargs):
+            self.swap(**kwargs)
+            return wrapped({"acknowledged": 1})
+        self.es.indices.update_aliases.side_effect = ambiguous_swap
+        with self.assertRaisesRegex(RuntimeError, "not acknowledged"):
+            self.publish()
+        stage = self.alias
+        self.assertEqual(self.journal()[0], "ready")
+        self.invalidate.assert_not_called()
+        self.assertEqual(self.publish()["index"], stage)
+        self.assertIsNone(self.journal())
+        self.es.reindex.assert_called_once()
+        self.es.indices.update_aliases.assert_called_once()
+
+    def test_optional_alias_errors_must_be_false_before_finalization(self):
+        for value in (0, None, [], "false", True):
+            with self.subTest(value=value):
+                self.es.indices.update_aliases.side_effect = lambda **kwargs: wrapped({
+                    "acknowledged": True, "errors": value,
+                })
+                with self.assertRaisesRegex(RuntimeError, "not acknowledged"):
+                    self.publish()
+                self.assertEqual(self.journal()[0], "ready")
+                self.invalidate.assert_not_called()
+        self.es.indices.update_aliases.side_effect = lambda **kwargs: wrapped({
+            **self.swap(**kwargs), "errors": False,
+        })
+        self.assertTrue(self.publish()["resumed"])
+
+    def test_malformed_wrapped_count_and_refresh_stop_publication(self):
+        for body in (None, {"count": 2, "_shards": None},
+                     {"count": 2, "_shards": {"failed": 0}, "timed_out": 0}):
+            self.es.count.side_effect = None
+            self.es.count.return_value = wrapped(body)
+            with self.subTest(body=body), self.assertRaisesRegex(RuntimeError, "count was incomplete"):
+                self.publish()
+            self.es.reindex.assert_not_called()
+            self.invalidate.assert_not_called()
+        for body in (None, {"_shards": []}, {"_shards": {"failed": False}}):
+            with self.subTest(refresh=body):
+                self.es.indices.refresh.return_value = wrapped(body)
+                with self.assertRaisesRegex(RuntimeError, "refresh was incomplete"):
+                    engine.refresh_symbol_index("stage", client=self.es)
+
     def setUp(self):
         self.sql = create_engine("sqlite://")
         self.addCleanup(self.sql.dispose)

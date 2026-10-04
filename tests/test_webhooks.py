@@ -15,6 +15,38 @@ from app.api.body_limit import RequestBodyLimit
 
 
 class WebhookTests(unittest.TestCase):
+    def test_signed_decoder_recursion_is_bad_request_before_database(self):
+        depth = 10000
+        body = b'{"nested":' + b'[' * depth + b'0' + b']' * depth + b'}'
+        signature = "sha256=" + hmac.new(b"test-secret", body, hashlib.sha256).hexdigest()
+        app = FastAPI()
+        app.include_router(webhooks.router)
+        app.add_middleware(RequestBodyLimit, max_bytes=len(body))
+        with TestClient(app) as client:
+            response = client.post("/webhooks/github", content=body, headers={
+                "X-Hub-Signature-256": signature, "X-GitHub-Event": "push",
+            })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"detail": "Invalid webhook JSON."})
+        self.assert_no_work()
+
+    def test_signed_duplicate_fields_reject_before_lookup_and_schedule(self):
+        for body in (b'{"repository":{},"repository":{"clone_url":"https://github.com/o/r"}}',
+                     b'{"repository":{"clone_url":"one","clone_url":"two"}}',
+                     b'{"nested":{"field":1,"field":2}}'):
+            with self.subTest(body=body):
+                response = self.send(body)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json(), {"detail": "Invalid webhook JSON."})
+                self.assert_no_work()
+
+    def test_invalid_signature_precedes_duplicate_field_parsing(self):
+        with patch.object(webhooks.json, "loads") as loads:
+            response = self.send(b'{"repository":{},"repository":{}}', signature="sha256=bad")
+        self.assertEqual(response.status_code, 401)
+        loads.assert_not_called()
+        self.assert_no_work()
+
     def setUp(self):
         app = FastAPI()
         app.include_router(webhooks.router)

@@ -25,10 +25,41 @@ from app.indexer import incremental, repository
 from app.indexer.symbols import index_repository_symbols
 from app.search import engine as search_engine, publication
 from elasticsearch import NotFoundError
-from elastic_transport import ApiResponseMeta, NodeConfig
+from elastic_transport import ApiResponseMeta, NodeConfig, ObjectApiResponse
 
 
 class IndexerRecoveryTests(unittest.TestCase):
+    def test_wrapped_delete_failures_preserve_checkpoint_and_stored_ids(self):
+        self.delete.side_effect = search_engine.delete_paths_from_elasticsearch
+        good = {"timed_out": False, "failures": [], "version_conflicts": 0, "total": 1, "deleted": 1}
+        with patch.object(search_engine, "resolve_search_index", return_value="fixed"), \
+             patch.object(search_engine, "create_symbol_index"), \
+             patch.object(search_engine, "elasticsearch_client") as es:
+            ids = None
+            for body in (None, {}, *[{**good, field: value} for field, value in (
+                ("timed_out", 0), ("version_conflicts", False), ("failures", {}),
+                ("total", True), ("deleted", 1.0), ("deleted", 0),
+            )]):
+                es.options.return_value.delete_by_query.return_value = ObjectApiResponse(
+                    body=body, meta=ApiResponseMeta(200, "1.1", {}, 0, NodeConfig("http", "localhost", 9200)))
+                with self.subTest(body=body), self.assertRaisesRegex(RuntimeError, "path deletion was incomplete"):
+                    incremental.sync_repository(self.db, self.repo_id)
+                current_ids = [row.id for row in self.db.query(CodeSymbol)]
+                ids = current_ids if ids is None else ids
+                self.assertEqual(ids, current_ids)
+                self.assertIsNotNone(self.db.get(RepositorySyncJob, self.repo_id))
+                self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "old")
+                self.index.assert_not_called()
+                self.invalidate.assert_not_called()
+            es.options.return_value.delete_by_query.return_value = ObjectApiResponse(
+                body=good, meta=ApiResponseMeta(200, "1.1", {}, 0, NodeConfig("http", "localhost", 9200)))
+            with patch.object(incremental, "parse_python_source") as parse:
+                result = incremental.sync_repository(self.db, self.repo_id)
+            self.assertTrue(result["resumed"])
+            parse.assert_not_called()
+            self.assertIsNone(self.db.get(RepositorySyncJob, self.repo_id))
+            self.assertEqual(self.db.get(Repository, self.repo_id).last_indexed_commit, "new")
+
     def real_revision_fixture(self):
         from app.indexer.git import git_output, repository_git_output
         git_output("init", str(self.path))

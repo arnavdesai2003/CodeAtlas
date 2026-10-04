@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import os
 import unittest
 from unittest.mock import Mock, patch
+from elastic_transport import ApiResponseMeta, NodeConfig, ObjectApiResponse
 
 os.environ.update(DATABASE_URL="postgresql+psycopg://test:test@127.0.0.1/test",
                   ELASTICSEARCH_URL="http://127.0.0.1:9200", REDIS_URL="redis://127.0.0.1:6379/15",
@@ -26,6 +27,87 @@ def name(number):
 
 
 class RetentionTests(unittest.TestCase):
+    def wrapped(self, body):
+        return ObjectApiResponse(body=body, meta=ApiResponseMeta(
+            200, "1.1", {}, 0, NodeConfig("http", "localhost", 9200)))
+
+    def test_malformed_task_inspection_blocks_every_deletion(self):
+        plan = self.plan()
+        bodies = (None, {"nodes": []}, {"nodes": {"n": None}},
+                  {"nodes": {"n": {"tasks": []}}}, {"nodes": {"n": {}}},
+                  {"nodes": {}, "node_failures": None},
+                  {"nodes": {}, "task_failures": False})
+        for body in bodies:
+            with self.subTest(body=body):
+                self.es.tasks.list.return_value = self.wrapped(body)
+                result = self.blocked(plan, quiesced=True)
+                self.assertIn("inspection was incomplete", result["detail"])
+                self.es.indices.delete.assert_not_called()
+                self.assertEqual(self.db.get(SearchIndexGeneration, name(3)).state, "retired")
+        self.es.tasks.list.return_value = self.wrapped({
+            "nodes": {}, "node_failures": [], "task_failures": [],
+        })
+        self.assertEqual(self.apply(plan, quiesced=True)["deleted"], [name(3), name(4)])
+
+    def test_malformed_statistics_cannot_authorize_cleanup(self):
+        plan = self.plan()
+        for body in (None, {}, {"_shards": None, "indices": {}},
+                     {"_shards": {"failed": False}, "indices": {}},
+                     {"_shards": {"failed": 0}, "indices": []}):
+            with self.subTest(body=body):
+                self.es.indices.stats.return_value = self.wrapped(body)
+                self.blocked(plan, quiesced=True)
+                self.es.indices.delete.assert_not_called()
+
+    def test_malformed_alias_metadata_cannot_authorize_cleanup(self):
+        plan = self.plan()
+        for aliases in ([], None, {"held": None}, {"": {}}):
+            with self.subTest(aliases=aliases):
+                self.meta[name(3)]["aliases"] = aliases
+                self.blocked(plan, quiesced=True)
+                self.es.indices.delete.assert_not_called()
+        self.meta[name(3)]["aliases"] = {"held": {}}
+        self.blocked(plan, quiesced=True)
+        self.es.indices.delete.assert_not_called()
+
+    def test_wrapped_metadata_and_deletion_support_idempotent_reconciliation(self):
+        plan = self.plan()
+        self.es.indices.get.side_effect = lambda **kw: self.wrapped(copy.deepcopy(self.meta))
+        self.es.indices.stats.return_value = self.wrapped({"_shards": {"failed": 0}, "indices": {}})
+        self.es.indices.delete.side_effect = lambda **kw: self.wrapped(self.delete(**kw))
+        self.assertEqual(self.apply(plan, quiesced=True)["deleted"], [name(3), name(4)])
+        self.assertEqual(self.apply(plan, quiesced=True)["already_absent"], [name(3), name(4)])
+        self.assertEqual(self.es.indices.delete.call_count, 2)
+
+    def test_invalid_delete_ack_preserves_audit_and_retry_reconciles_absence(self):
+        plan = self.plan()
+        def ambiguous_delete(**kwargs):
+            self.delete(**kwargs)
+            return self.wrapped({"acknowledged": "true"})
+        self.es.indices.delete.side_effect = ambiguous_delete
+        result = self.blocked(plan, quiesced=True)
+        self.assertEqual(result["failed_index"], name(3))
+        self.assertEqual(result["deleted"], [])
+        self.assertEqual(self.db.get(SearchIndexGeneration, name(3)).state, "retired")
+        self.assertIn(name(4), self.meta)
+        self.es.indices.delete.side_effect = self.delete
+        retry = self.apply(plan, quiesced=True)
+        self.assertEqual(retry["already_absent"], [name(3)])
+        self.assertEqual(retry["deleted"], [name(4)])
+
+    def test_partial_policy_is_rejected_before_lock_or_service_work(self):
+        plan = self.plan()
+        for policy in ({}, {"keep_retired": 1}, {"min_age_hours": 24},
+                       {"min_age_hours": 24, "keep_retired": 1, "unknown": True}):
+            with self.subTest(policy=policy), \
+                 patch("app.search.generation_retention.generation_maintenance_lock") as lock:
+                plan["policy"] = policy
+                self.es.reset_mock()
+                self.blocked(plan, quiesced=True)
+                lock.assert_not_called()
+                self.es.info.assert_not_called()
+                self.es.indices.delete.assert_not_called()
+
     def setUp(self):
         self.sql = create_engine("sqlite://")
         self.addCleanup(self.sql.dispose)
