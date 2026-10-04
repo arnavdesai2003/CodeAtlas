@@ -39,3 +39,19 @@ initialization, service/API restart or configuration write occurred. The previou
 documentation-only checkpoint. Existing benchmark results remain historical;
 this validation makes no new performance or capacity claim. The fixed 25-case
 evaluation does not establish quality for all queries or concurrent publication.
+
+## Evaluation exit correctness follow-up
+
+The evaluation CLI now parses arguments before ground-truth access. Help exits 0;
+unsupported arguments exit 2. Invalid ground-truth cases still appear in the report
+and are excluded from subset metrics, but now cause exit 1. With zero valid cases,
+the command skips all retrieval and produces no misleading zero-metric summary.
+A complete valid set returns 0 after all four methods finish. This exit status
+checks ground-truth completeness/execution, not a quality threshold: compare the
+reported metrics against the baseline separately.
+
+Four offline regressions bring the suite to 408 passing tests. A fresh read-only
+CPU/one-thread evaluation with cached models/downloads disabled exited 0, validated
+all 25 cases and again reproduced every metric in the table above. No new store
+count/UUID snapshot was taken for this follow-up. No corpus/index/cache/schema/
+settings/API changes or new performance/capacity claim occurred.

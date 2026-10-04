@@ -1,4 +1,5 @@
 from __future__ import annotations
+import argparse
 
 from app.db.database import SessionLocal
 from app.db.models import CodeSymbol, Repository
@@ -373,7 +374,8 @@ def evaluate(
 # Main
 # ---------------------------------------------------------------------
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description="Evaluate four retrieval methods against validated multi-repository cases.").parse_args(argv)
     valid_cases, invalid_cases = (
         validate_test_cases()
     )
@@ -412,6 +414,9 @@ def main():
         "Only validated ground-truth cases "
         "will be included in the metrics."
     )
+    if not valid_cases:
+        print("No validated cases; retrieval evaluation skipped.")
+        return 1
 
     bm25_metrics = evaluate(
         bm25_search,
@@ -464,7 +469,11 @@ def main():
     f"{hybrid_metrics[metric]:>15.3f}"
     f"{reranked_metrics[metric]:>15.3f}"
     )
+    if invalid_cases:
+        print("Evaluation incomplete: invalid ground-truth cases were excluded; subset metrics are not a full verification.")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

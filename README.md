@@ -200,7 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **404 tests** (2026-10-04), mocks external services and
+The offline suite passes **408 tests** (2026-10-04), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -238,6 +238,8 @@ Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as
 metrics. The inherited hybrid Recall@10 baseline is **0.880**; preserve quality
 when changing retrieval, ranking or indexing.
+Evaluation exits nonzero if any ground-truth case is invalid, while still reporting
+valid-subset metrics; an empty valid set skips retrieval. `--help` does not evaluate.
 The [2026-10-04 live checkpoint](docs/validation-checkpoint-2026-10-04.md)
 reproduced every metric with 25 valid cases and verified six repositories,
 4,340 symbols/documents, legacy routing and no pending jobs.

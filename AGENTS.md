@@ -1858,3 +1858,16 @@ No ingestion/fetch/reset/reindex/publication/cache flush/rotation/schema/setting
 services/API change or new performance/capacity claim. Prior 404 offline tests
 inherited, not rerun for docs-only checkpoint. Process CPU/thread/offline flags
 do not alter .env/defaults. See docs/validation-checkpoint-2026-10-04.md.
+
+## Latest milestone: evaluation exit correctness (2026-10-04)
+
+Multi-repo evaluator parses args before ground-truth access; help 0/unknown args 2.
+Any invalid cases retain valid-subset metrics but cause exit 1. Zero valid cases
+skip retrieval/summary and exit 1. Complete cases/method execution return 0;
+this is completeness, not an automated quality threshold. Four regressions bring
+offline suite to 408 passing tests. Fresh live read-only CPU/one-thread evaluation
+with offline model flags exited 0, all 25 cases valid and every baseline metric
+reproduced (hybrid Recall@10 .880/MRR .499).
+
+No new count/UUID snapshot, corpus/index/cache/schema/settings/API change or new
+performance/capacity claim. See validation-checkpoint docs for scope and exits.
