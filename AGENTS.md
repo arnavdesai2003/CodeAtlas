@@ -1466,3 +1466,13 @@ verification remains before parsing; rejected payloads perform no database
 lookup/background work. Body middleware reviewed without changes. No tests added
 or run under the recorded constraint; diff whitespace checks passed. No live
 services/settings/corpus/cache changes or new metrics claimed. See webhooks.
+
+## Latest checkpoint: static Python syntax validation (2026-10-04)
+
+Parsed all 91 Git-tracked Python files with ast.parse using the local virtual
+environment and UTF-8 source reads. All parsed successfully; no modules imported
+or tests executed. This checks syntax only, not runtime/client compatibility,
+recovery correctness, retrieval quality or performance. Ingestion reservation/
+ambiguous-commit preservation reviewed without changes. No production changes,
+live services/settings/corpus/cache changes or new runtime metrics claimed.
+The recorded restriction on adding/running tests remains in effect.
