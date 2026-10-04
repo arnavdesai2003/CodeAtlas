@@ -1580,3 +1580,19 @@ CLI errors are sanitized/nonzero. No application behavior, corpus/index/cache,
 settings/API changes, retrieval evaluation or performance claims. Existing Docker
 services remain running. Coordination does not establish cross-store atomicity
 or fence legacy/external writers.
+
+## Latest milestone: cross-process writer lock release (2026-10-04)
+
+Added scripts.verify_writer_processes with spawned independent PostgreSQL owners.
+Four live groups passed: shared writer/exclusive publisher exclusion, different
+repository overlap for shared writers, and reacquisition after normal exit or
+deliberate termination of owned scratch processes. Read-only preflight rejects
+pending jobs and registered random IDs; actual corpus locks briefly exclude
+cooperating writers. Idle writers required. Handshakes/exit/release checks bounded;
+ordinary cleanup stops owned children and closes pipes even if stopping fails.
+Parent abrupt termination is outside cleanup guarantees. See writer-lock docs.
+
+Eight offline failure tests bring the suite to 333 passing tests. No metadata or
+schema writes, corpus/index/cache/settings/API changes or new performance/quality
+claims. This is session-lock release, not server crash/network-partition recovery
+or durable journal replay. Existing services remain running.

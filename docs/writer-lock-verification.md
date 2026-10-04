@@ -33,3 +33,26 @@ rows, schema, corpus/index/cache, settings or API processes changed. This verifi
 cooperating process lock behavior, not crash recovery, cross-store atomicity,
 legacy/external writers, sustained concurrency or retrieval quality. No performance
 claim follows from the result.
+
+## Independent processes and owner termination
+
+```sh
+.venv/bin/python -B -m scripts.verify_writer_processes
+```
+
+This follow-up starts four owned scratch processes using Python's spawn context,
+so each initializes independent SQLAlchemy connections. Each process holds either
+a shared writer or exclusive publisher lock. The parent verifies repository and
+corpus exclusion; a different repository can overlap a shared writer. Two owners
+exit normally and two are deliberately terminated. The parent then verifies that
+both corpus and repository locks are available, with a five-second release budget.
+Only the probe's own processes are terminated. Handshakes are bounded; ordinary
+failure cleanup stops the owned process and closes pipes. Abrupt termination of
+the parent itself is outside this cleanup guarantee.
+
+On 2026-10-04 all four real PostgreSQL groups passed. Eight offline failure tests
+bring the full suite to 333 passing tests. The same idle-writer requirement and
+read-only metadata scope apply. This proves exclusion and session-lock release
+across these local processes; it does not simulate a PostgreSQL/server crash,
+network partition, metadata/index publication interruption or durable job replay.
+No live rows/schema, corpus/index/cache, settings or API processes were changed.
