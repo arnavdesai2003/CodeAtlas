@@ -69,11 +69,15 @@ def inspect_generations(db, client, *, policy=None, now=None,
     ))
     stats = {}
     if metadata:
-        response = client.indices.stats(index=sorted(metadata), metric=["docs", "store"],
-                                        level="indices", expand_wildcards="all", forbid_closed_indices=False)
-        if response.get("_shards", {}).get("failed", 0):
-            raise RetentionBlocked("Index statistics contain shard failures; inspect service health first.")
-        stats = response.get("indices", {})
+        response = response_body(client.indices.stats(
+            index=sorted(metadata), metric=["docs", "store"],
+            level="indices", expand_wildcards="all", forbid_closed_indices=False,
+        ))
+        shards = response.get("_shards") if isinstance(response, Mapping) else None
+        failed = shards.get("failed") if isinstance(shards, Mapping) else None
+        stats = response.get("indices") if isinstance(response, Mapping) else None
+        if type(failed) is not int or failed != 0 or not isinstance(stats, Mapping):
+            raise RetentionBlocked("Index statistics were incomplete; inspect service health first.")
     issues = []
     if active not in metadata:
         issues.append("The resolved active index is missing; reconcile before cleanup.")

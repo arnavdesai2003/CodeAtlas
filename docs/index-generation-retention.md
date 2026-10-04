@@ -172,3 +172,12 @@ accepted. Malformed shapes or any reported write task block cleanup before
 deletion; task API errors remain failures. This does not prove reader quiescence
 or exclude external writes starting after inspection. No tests were added or run
 for this guard, and no live cleanup was performed.
+
+Inventory statistics require response/shard mappings, explicit integer
+`_shards.failed=0` and an `indices` mapping after client-body unwrapping. Missing
+or malformed completion metadata blocks inspection rather than defaulting to
+zero failures. Per-index statistics may still be absent (for example for closed
+indices); usage remains informational and eligibility still depends on lifecycle,
+identity and protection checks. The existing missing-active-index fixture uses a
+complete statistics response. No tests were added or run for this guard, and no
+live cleanup was performed.

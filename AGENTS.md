@@ -1366,3 +1366,13 @@ quiescence/locking requirements remain and external post-inspection writes are
 not excluded. No tests added or run under the recorded constraint; diff
 whitespace checks passed. No live cleanup/service/settings/corpus/cache changes
 or new metrics claimed. See index-generation-retention.
+
+## Latest milestone: complete retention statistics (2026-10-04)
+
+Generation inventory unwraps statistics responses and requires mapping response/
+shard metadata, explicit integer zero failed shards and mapping indices. Missing
+failure counts no longer imply success. Per-index usage remains informational
+and absent usage stays supported. Existing missing-active-index fixture aligned
+with a complete stats response. No tests added or run under the recorded
+constraint; diff whitespace checks passed. No live cleanup/services/settings/
+corpus/cache changes or new metrics claimed. See index-generation-retention.

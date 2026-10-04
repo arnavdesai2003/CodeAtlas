@@ -127,7 +127,7 @@ class RetentionTests(unittest.TestCase):
         self.es.indices.stats.return_value = {"_shards": {"failed": 1}}
         with self.assertRaises(RetentionBlocked):
             self.inspect()
-        self.es.indices.stats.return_value = {}
+        self.es.indices.stats.return_value = {"_shards": {"failed": 0}, "indices": {}}
         del self.meta[name(1)]
         self.assertTrue(self.inspect()["issues"])
         self.blocked(quiesced=True)
