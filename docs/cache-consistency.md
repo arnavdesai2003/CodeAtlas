@@ -90,3 +90,10 @@ reject cyclic/deep writes and exercise healthy miss/refill behavior with clean
 coalescing state. Isolated real Redis verified nested corruption, retained
 generation, healthy refill and TTL; both private keys were removed. Retrieval
 and ranking were unchanged; no new evaluation or throughput claim was made.
+
+Cached JSON with duplicate object field names is rejected at every nesting
+level instead of silently choosing the last value. The entry becomes a miss
+with its observed generation retained, permitting a healthy fenced refill.
+Normal serialized cache writes already have unique object fields. This adds no
+full row schema validation, key changes, rotation or flush. No tests were added
+or run and no live Redis entries were changed for this follow-up.

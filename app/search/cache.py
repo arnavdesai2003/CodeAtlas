@@ -61,6 +61,15 @@ def _reject_constant(value: str):
     raise ValueError("Invalid cached JSON constant")
 
 
+def _unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate cached JSON field")
+        result[key] = value
+    return result
+
+
 def _valid_shape(results, limit):
     if not isinstance(results, list) or len(results) > limit or not all(isinstance(item, dict) for item in results):
         return False
@@ -89,7 +98,10 @@ def get_cached_search(query: str, limit: int) -> CacheLookup:
     if value is None:
         return CacheLookup(generation=generation)
     try:
-        results = json.loads(value, parse_float=_finite_float, parse_constant=_reject_constant)
+        results = json.loads(
+            value, parse_float=_finite_float, parse_constant=_reject_constant,
+            object_pairs_hook=_unique_object,
+        )
         if not _valid_shape(results, limit):
             raise ValueError("Invalid cached result shape")
     except (TypeError, ValueError, RecursionError):

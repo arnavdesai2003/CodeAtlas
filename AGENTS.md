@@ -1416,3 +1416,13 @@ Omitted completion metadata retains prior compatibility; no new omitted-field
 completeness guarantee. Pending sync replay ordering reviewed without changes.
 No tests added or run under the recorded constraint; diff whitespace checks
 passed. No live evaluation/services/settings/corpus/cache changes or new metrics.
+
+## Latest milestone: duplicate cached JSON field rejection (2026-10-04)
+
+Cache decoding rejects duplicate object fields at every nesting level instead
+of silently selecting the last value. Corrupt entries become generation-bound
+misses and retain healthy conditional refill; normal serialized writes remain
+unchanged. No full row schema validation, key migration, rotation or flush added.
+No tests added or run under the recorded constraint; diff whitespace checks
+passed. No live Redis/services/settings/corpus changes or new metrics claimed.
+See cache-consistency.
