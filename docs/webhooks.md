@@ -13,6 +13,12 @@ return HTTP 401. Signed invalid JSON, a non-object root, or a push payload with
 a non-object repository/missing/non-string/blank clone URL return HTTP 400.
 Rejected requests do not look up repositories or schedule background sync.
 
+Signed JSON that exceeds the decoder's nesting capacity also returns the same
+HTTP 400 `Invalid webhook JSON.` response. Decoder `RecursionError` is handled
+before database access or background scheduling; signature verification still
+comes first. This adds no new nesting limit and leaves valid event behavior
+unchanged. No tests were added or run for this follow-up.
+
 Valid `ping` and unsupported events retain HTTP 202 with `ok`/`ignored` bodies
 and schedule no work. A valid push must match a registered repository's exact
 clone URL; otherwise it returns 404. Accepted pushes return 202 and schedule

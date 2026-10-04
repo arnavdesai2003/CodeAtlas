@@ -107,7 +107,7 @@ async def github_webhook(
 
     try:
         payload = json.loads(payload_bytes)
-    except (ValueError, UnicodeDecodeError) as exc:
+    except (ValueError, UnicodeDecodeError, RecursionError) as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook JSON.") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="Webhook payload must be an object.")

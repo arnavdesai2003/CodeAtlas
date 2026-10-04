@@ -1446,3 +1446,13 @@ other generations. Missing/invalid old tokens skip cleanup after successful
 rotation; strict rotation/fencing and normal random tokens remain unchanged.
 No tests added or run under the recorded constraint; diff whitespace checks
 passed. No live Redis/services/settings/corpus changes or new metrics claimed.
+
+## Latest milestone: webhook decoder recursion fallback (2026-10-04)
+
+Authenticated webhook JSON decoder RecursionError now returns existing sanitized
+HTTP 400 Invalid webhook JSON before database lookup/background scheduling,
+instead of escaping as a server error. Signature verification remains first;
+valid payload behavior and existing body limit unchanged. Coalescing failure/
+timeout lifecycle reviewed without changes. No tests added or run under the
+recorded constraint; diff whitespace checks passed. No live services/settings/
+corpus/cache changes or new metrics claimed. See webhooks.
