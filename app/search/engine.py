@@ -609,8 +609,21 @@ def index_files_in_elasticsearch(
 # ---------------------------------------------------------------------
 
 def _complete_hits(response) -> list[dict]:
-    if response.get("timed_out") or response.get("_shards", {}).get("failed", 0):
-        raise IncompleteSearchError("Elasticsearch search did not complete.")
+    response = response_body(response)
+    if not isinstance(response, Mapping):
+        raise InvalidSearchResponseError("Invalid retrieval response.")
+    if "timed_out" in response:
+        if type(response["timed_out"]) is not bool:
+            raise InvalidSearchResponseError("Invalid retrieval completion metadata.")
+        if response["timed_out"]:
+            raise IncompleteSearchError("Elasticsearch search did not complete.")
+    if "_shards" in response:
+        shards = response["_shards"]
+        failed = shards.get("failed") if isinstance(shards, Mapping) else None
+        if type(failed) is not int or failed < 0:
+            raise InvalidSearchResponseError("Invalid retrieval completion metadata.")
+        if failed:
+            raise IncompleteSearchError("Elasticsearch search did not complete.")
     payload = response.get("hits")
     if not isinstance(payload, dict) or not isinstance(payload.get("hits"), list):
         raise InvalidSearchResponseError("Invalid retrieval hit collection.")

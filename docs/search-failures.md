@@ -127,3 +127,13 @@ and does not certify source-content correctness or repository permissions.
 Offline tests cover collections, required/optional fields, line ranges and
 cache/retry behavior. Live evaluation reproduced all baseline metrics with 25
 valid cases; no malformed live documents were observed or repaired.
+
+Retrieval unwraps Elasticsearch response bodies before validating their shape.
+When reported, `timed_out` must be boolean and `_shards` must be a mapping with
+a nonnegative integer `failed` count. Malformed falsey values raise
+`InvalidSearchResponseError`; true timeouts or positive shard failures retain
+`IncompleteSearchError`. Both follow the existing sanitized 503/cache-fill
+failure path. Omitted completion fields retain prior compatibility; this is
+validation of reported metadata, not a new completeness guarantee for omitted
+fields. Valid ranking and result formatting are unchanged. No tests were added
+or run and no live evaluation was performed for this follow-up.

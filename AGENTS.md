@@ -1405,3 +1405,14 @@ echo field contents. Generated plans remain unchanged; existing lifecycle/UUID
 retry checks reviewed without changes. No tests added or run under the recorded
 constraint; diff whitespace checks passed. No live cleanup/services/settings/
 corpus/cache changes or new metrics claimed.
+
+## Latest milestone: retrieval completion metadata types (2026-10-04)
+
+Retrieval unwraps Elasticsearch bodies and validates mapping responses plus
+reported timeout/shard completion types. Falsey nonboolean timeouts and invalid
+shard failure counts raise existing InvalidSearchResponseError; true timeouts/
+positive failures retain IncompleteSearchError and sanitized 503/no-fill behavior.
+Omitted completion metadata retains prior compatibility; no new omitted-field
+completeness guarantee. Pending sync replay ordering reviewed without changes.
+No tests added or run under the recorded constraint; diff whitespace checks
+passed. No live evaluation/services/settings/corpus/cache changes or new metrics.
