@@ -232,3 +232,11 @@ rejected even when numerically equal. Missing/malformed completion fields stop
 before target indexing or alias publication, leaving the building journal for a
 fresh-stage retry. Existing success/count-mismatch fixtures were aligned with
 this response contract; no tests were added or run for this follow-up.
+
+Alias-switch acknowledgement requires a mapping with literal
+`acknowledged=true`. The optional `errors` field must be literal `false` when
+present; older successful responses without that field remain accepted.
+Malformed or unacknowledged responses stop finalization and retain the ready
+journal. Because the switch may already have happened, retry inspects the actual
+alias target before deciding whether to switch or finalize; it never rebuilds an
+already active stage. No tests were added or run for this acknowledgement change.

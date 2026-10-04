@@ -1268,3 +1268,14 @@ alias publication, retaining building work for fresh-stage retry. Existing
 success/count-mismatch fixtures aligned; no tests added or run under the recorded
 constraint. Diff whitespace checks passed. No live publication, corpus, cache,
 settings/API changes or new quality/performance claim. See atomic-publication.
+
+## Latest milestone: strict alias-switch acknowledgement (2026-10-04)
+
+Alias publication now requires a mapping with literal acknowledged=true and,
+when present, literal errors=false. Truthy strings/integers and malformed error
+flags no longer authorize finalization. Older successful responses omitting the
+optional errors field remain supported. Rejection retains ready work; existing
+retry inspects the actual alias outcome, preserving lost-ack recovery without
+rebuilding an active stage. No tests added or run under the recorded constraint;
+diff whitespace checks passed. No live publication/service/settings/corpus/cache
+changes or new evaluation/performance claim. See atomic-publication.

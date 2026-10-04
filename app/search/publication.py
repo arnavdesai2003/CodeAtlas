@@ -150,7 +150,11 @@ def publish_repository_index(db, repository_id: int) -> dict:
         actions.append({"add": {"index": job.staging_index, "alias": engine.SEARCH_ALIAS,
                                 "is_write_index": True}})
         response = client.indices.update_aliases(actions=actions)
-        if response.get("errors") or not response.get("acknowledged"):
+        if (
+            not isinstance(response, Mapping)
+            or response.get("acknowledged") is not True
+            or ("errors" in response and response["errors"] is not False)
+        ):
             raise RuntimeError("Alias publication was not acknowledged; retry to inspect its outcome.")
         if engine.resolve_search_index() != job.staging_index:
             raise RuntimeError("Published alias does not reference the prepared staging index.")
