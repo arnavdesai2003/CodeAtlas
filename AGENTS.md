@@ -1395,3 +1395,13 @@ already provide both fields and normal inspection defaults remain unchanged.
 Invalid policies stop before maintenance locking/inventory/deletion. No tests
 added or run under the recorded constraint; diff whitespace checks passed. No
 live cleanup/services/settings/corpus/cache changes or new metrics claimed.
+
+## Latest milestone: unambiguous cleanup-plan JSON (2026-10-04)
+
+The generation-management apply CLI rejects duplicate JSON fields at every
+object level rather than silently choosing the last value. Invalid plans stop
+before apply/inventory/maintenance locking with a fixed diagnostic that does not
+echo field contents. Generated plans remain unchanged; existing lifecycle/UUID
+retry checks reviewed without changes. No tests added or run under the recorded
+constraint; diff whitespace checks passed. No live cleanup/services/settings/
+corpus/cache changes or new metrics claimed.

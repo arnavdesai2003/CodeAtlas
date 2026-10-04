@@ -11,6 +11,15 @@ from app.search.generation_retention import (
 )
 
 
+def _unique_plan_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise RetentionBlocked("Cleanup plan contains duplicate JSON fields; create a new unambiguous plan.")
+        result[key] = value
+    return result
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -28,7 +37,7 @@ def main(argv=None):
     try:
         client = elasticsearch_client.options(request_timeout=60)
         if args.command == "apply":
-            plan = json.loads(args.plan.read_text(encoding="utf-8"))
+            plan = json.loads(args.plan.read_text(encoding="utf-8"), object_pairs_hook=_unique_plan_object)
             result = apply_cleanup_plan(db, client, plan, quiesced=args.quiesced)
         else:
             report = inspect_generations(db, client, policy=RetentionPolicy(args.min_age_hours, args.keep_retired))

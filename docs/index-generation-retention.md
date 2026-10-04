@@ -171,6 +171,13 @@ normal inspection/plan creation retains its default policy. This validation
 occurs before maintenance locking, inventory requests or deletion. No tests were
 added or run for this plan-format guard, and no live cleanup was performed.
 
+The apply command rejects duplicate JSON field names at every object level,
+including policy and candidate objects. Conflicting repeated fields cannot
+silently select the last value during loading. Rejection happens before apply,
+inventory requests or maintenance locking and reports a fixed diagnostic without
+echoing plan contents. Generated plans are unaffected. No tests were added or
+run for this loader guard, and no live cleanup was performed.
+
 Index metadata is unwrapped and validated as a mapping rather than coerced with
 `dict()`. Index entries and alias collections/details must be mappings with
 nonempty string names. Malformed empty lists cannot imply an unaliased index;
