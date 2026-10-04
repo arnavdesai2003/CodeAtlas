@@ -1456,3 +1456,13 @@ valid payload behavior and existing body limit unchanged. Coalescing failure/
 timeout lifecycle reviewed without changes. No tests added or run under the
 recorded constraint; diff whitespace checks passed. No live services/settings/
 corpus/cache changes or new metrics claimed. See webhooks.
+
+## Latest milestone: duplicate webhook JSON field rejection (2026-10-04)
+
+Signed webhook payloads reject duplicate object fields at all nesting levels
+with existing sanitized HTTP 400 Invalid webhook JSON. Ambiguous repository/
+clone_url values cannot silently choose the last field for scheduling. Signature
+verification remains before parsing; rejected payloads perform no database
+lookup/background work. Body middleware reviewed without changes. No tests added
+or run under the recorded constraint; diff whitespace checks passed. No live
+services/settings/corpus/cache changes or new metrics claimed. See webhooks.

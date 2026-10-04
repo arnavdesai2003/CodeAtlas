@@ -23,6 +23,15 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 
+def _unique_payload_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate webhook JSON field")
+        result[key] = value
+    return result
+
+
 def verify_github_signature(
     payload: bytes,
     signature: str | None,
@@ -106,7 +115,7 @@ async def github_webhook(
     )
 
     try:
-        payload = json.loads(payload_bytes)
+        payload = json.loads(payload_bytes, object_pairs_hook=_unique_payload_object)
     except (ValueError, UnicodeDecodeError, RecursionError) as exc:
         raise HTTPException(status_code=400, detail="Invalid webhook JSON.") from exc
     if not isinstance(payload, dict):

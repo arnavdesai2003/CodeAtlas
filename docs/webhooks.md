@@ -19,6 +19,13 @@ before database access or background scheduling; signature verification still
 comes first. This adds no new nesting limit and leaves valid event behavior
 unchanged. No tests were added or run for this follow-up.
 
+Duplicate JSON object fields are rejected at every nesting level with the same
+HTTP 400 response. Conflicting `repository` or `clone_url` fields cannot silently
+select the last value for sync scheduling. Signature verification still checks
+the exact raw bytes first, and rejection performs no database lookup or scheduled
+work. Valid unique-field payloads are unchanged. No tests were added or run for
+this follow-up.
+
 Valid `ping` and unsupported events retain HTTP 202 with `ok`/`ignored` bodies
 and schedule no work. A valid push must match a registered repository's exact
 clone URL; otherwise it returns 404. Accepted pushes return 202 and schedule
