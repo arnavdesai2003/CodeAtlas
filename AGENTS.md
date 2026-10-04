@@ -1279,3 +1279,14 @@ retry inspects the actual alias outcome, preserving lost-ack recovery without
 rebuilding an active stage. No tests added or run under the recorded constraint;
 diff whitespace checks passed. No live publication/service/settings/corpus/cache
 changes or new evaluation/performance claim. See atomic-publication.
+
+## Latest milestone: publication response container guards (2026-10-04)
+
+Publication counts require mapping responses and shard metadata, with literal
+timed_out=false when the optional field is present. Missing timeout remains
+supported by the Count API contract; falsey malformed values no longer pass.
+Staging creation also guards response shape before boolean acknowledgement
+checks. Invalid containers raise existing publication RuntimeErrors, preserving
+building/ready recovery instead of incidental attribute errors. No tests added
+or run under the recorded constraint; diff whitespace checks passed. No live
+services/publication/settings/corpus/cache changes or new metrics claimed.

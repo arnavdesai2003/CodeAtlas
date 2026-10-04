@@ -32,9 +32,15 @@ def _check_response(response, operation: str) -> None:
 
 def checked_count(client, **kwargs) -> int:
     response = client.count(**kwargs)
-    failed = response.get("_shards", {}).get("failed")
+    if not isinstance(response, Mapping):
+        raise RuntimeError("Elasticsearch publication count was incomplete; retry full indexing.")
+    shards = response.get("_shards")
+    failed = shards.get("failed") if isinstance(shards, Mapping) else None
     count = response.get("count")
-    if response.get("timed_out") or type(failed) is not int or failed != 0:
+    if (
+        ("timed_out" in response and response["timed_out"] is not False)
+        or type(failed) is not int or failed != 0
+    ):
         raise RuntimeError("Elasticsearch publication count was incomplete; retry full indexing.")
     if type(count) is not int or count < 0:
         raise RuntimeError("Elasticsearch publication count was invalid; retry full indexing.")
@@ -51,7 +57,11 @@ def create_staging_index(client, *, source: str, stage: str) -> None:
         "analysis", "similarity", "mapping",
     ) if key in source_settings}
     response = client.indices.create(index=stage, mappings=mappings, settings=settings)
-    if response.get("acknowledged") is not True or response.get("shards_acknowledged") is not True:
+    if (
+        not isinstance(response, Mapping)
+        or response.get("acknowledged") is not True
+        or response.get("shards_acknowledged") is not True
+    ):
         raise RuntimeError("Staging index creation was not acknowledged; retry full indexing.")
 
 

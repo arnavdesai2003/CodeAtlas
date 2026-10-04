@@ -240,3 +240,12 @@ Malformed or unacknowledged responses stop finalization and retain the ready
 journal. Because the switch may already have happened, retry inspects the actual
 alias target before deciding whether to switch or finalize; it never rebuilds an
 already active stage. No tests were added or run for this acknowledgement change.
+
+Count responses and their `_shards` fields must be mappings. The optional
+`timed_out` field must be literal `false` when present; normal Count responses
+without it remain supported. Malformed containers or falsey nonboolean timeout
+values raise the publication count error rather than authorizing a switch or
+raising incidental attribute errors. Staging-creation acknowledgement responses
+also require a mapping before checking both boolean acknowledgements. These
+guards preserve the existing building/ready retry paths. No tests were added or
+run for this follow-up.
