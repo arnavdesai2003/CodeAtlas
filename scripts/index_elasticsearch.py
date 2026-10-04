@@ -1,4 +1,6 @@
 import argparse
+from app.indexer.locking import validate_repository_id
+from scripts.arguments import repository_id_argument
 
 from app.db.database import SessionLocal
 from app.search.engine import (
@@ -7,6 +9,7 @@ from app.search.engine import (
 
 
 def main(repository_id: int = 1):
+    validate_repository_id(repository_id)
     db = SessionLocal()
 
     try:
@@ -25,7 +28,11 @@ def main(repository_id: int = 1):
         db.close()
 
 
-if __name__ == "__main__":
+def cli(argv=None):
     parser = argparse.ArgumentParser(description="Build or resume atomic publication for one repository.")
-    parser.add_argument("--repository-id", type=int, default=1)
-    main(parser.parse_args().repository_id)
+    parser.add_argument("--repository-id", type=repository_id_argument, default=1)
+    main(parser.parse_args(argv).repository_id)
+
+
+if __name__ == "__main__":
+    cli()

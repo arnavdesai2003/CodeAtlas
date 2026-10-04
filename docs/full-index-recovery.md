@@ -119,3 +119,20 @@ checkpoint and successful replay after valid output returns. Two real CPU model
 batch vectors passed validation without indexing, and existing-index retrieval
 evaluation reproduced baseline metrics. No invalid production model output was
 observed or repaired.
+## Single-repository command selection (2026-10-04)
+
+Both commands default to repository 1 and accept an explicit positive int32 ID:
+
+```sh
+.venv/bin/python -m scripts.index_symbols --repository-id 6
+.venv/bin/python -m scripts.index_elasticsearch --repository-id 6
+```
+
+Symbol indexing commits a snapshot awaiting Elasticsearch publication; the second
+command builds or resumes that publication. Inspect pending work first and follow
+the current [atomic publication workflow](atomic-publication.md). This option does not discover files or
+advance the Git checkpoint. Invalid CLI IDs exit with argument error before
+session creation; direct `main()` calls also validate before opening a session.
+Five offline command tests cover rejection, default/explicit selection, dispatch
+and session cleanup after failure. All 381 offline tests pass. No live indexing,
+schema/data/settings changes or performance/quality measurement occurred.

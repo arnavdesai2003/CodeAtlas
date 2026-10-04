@@ -12,6 +12,11 @@ class RepositorySyncInProgress(RuntimeError):
 MAX_REPOSITORY_ID = 2**31 - 1
 
 
+def validate_repository_id(repository_id):
+    if type(repository_id) is not int or not 1 <= repository_id <= MAX_REPOSITORY_ID:
+        raise ValueError("Repository ID must be a positive int32 integer.")
+
+
 @contextmanager
 def _writer_locks(db: Session, locks):
     """Hold PostgreSQL session locks on one connection, release in reverse order."""
@@ -60,8 +65,7 @@ def repository_sync_lock(db: Session, repository_id: int, *, publication: bool =
     for single-threaded offline tests. A pending journal blocks writers even
     after a publisher crashes and its advisory locks disappear.
     """
-    if type(repository_id) is not int or not 1 <= repository_id <= MAX_REPOSITORY_ID:
-        raise ValueError("Repository ID must be a positive int32 integer.")
+    validate_repository_id(repository_id)
     suffix = "" if publication else "_shared"
     with _writer_locks(db, ((-1, suffix), (repository_id, ""))):
         pending = db.get(IndexPublicationJob, 1, populate_existing=True)

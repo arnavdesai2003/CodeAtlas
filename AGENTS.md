@@ -56,7 +56,8 @@ five repositories after micrograd. Full workflow (mutates corpus):
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-Single-repository scripts currently hardcode ID 1. Incremental POST
+Single-repository symbol/ES commands default to ID 1 and accept `--repository-id`;
+older single-repository utilities may still hardcode ID 1. Incremental POST
 `/repositories/{id}/sync` updates symbols/Elasticsearch and invalidates cache.
 Avoid unnecessary full reindexing. Full indexing is not an atomic rebuild;
 verify stale documents/cache if rebuilding. Evaluation validates 25 expected
@@ -1731,3 +1732,16 @@ using read-only metadata and temporary locks.
 No schema/rows/corpus/index/cache/settings/API restart or retrieval/ranking changes,
 quality evaluation or performance claims. Maintenance internal corpus key unchanged.
 See writer-lock-verification/API-access docs for behavior and scope.
+
+## Latest milestone: single-repository indexing command validation (2026-10-04)
+
+scripts.index_symbols now accepts --repository-id, default 1, matching the ES
+publication command. Both CLIs validate positive int32 IDs through a shared
+argument adapter before SessionLocal; direct main calls also validate. Writer
+context uses the same domain validator. Invalid CLI input exits 2; valid defaults/
+IDs preserve dispatch. Five command regressions verify rejection, selection and
+session cleanup after operation failure. 381 offline tests pass.
+
+No live indexing/publication, schema/rows/corpus/cache/settings/API changes or
+quality/performance measurements. Symbol work still needs ES publication and
+does not discover files/advance checkpoint. See full-index-recovery docs.
