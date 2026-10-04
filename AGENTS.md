@@ -1301,3 +1301,13 @@ cache/checkpoint finalization or alias switching respectively. Valid integer
 zero failure responses remain unchanged. No tests added or run under the
 recorded constraint; diff whitespace checks passed. No live services, settings,
 corpus, cache or publication changes and no new metrics claimed.
+
+## Latest milestone: alias resolution response validation (2026-10-04)
+
+Alias resolution requires a single-target mapping, nonempty string target and
+mapping metadata containing the requested alias. Invalid/unrelated responses
+raise instead of selecting an arbitrary iterable element or silently falling
+back. Only NotFoundError retains legacy fallback. Per-request concrete generation
+pinning and valid routing remain unchanged. Existing success fixtures aligned;
+no tests added or run under the recorded constraint. Diff whitespace checks
+passed. No live routing/services/settings/corpus/cache changes or new metrics.

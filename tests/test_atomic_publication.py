@@ -37,7 +37,7 @@ class RoutingTests(unittest.TestCase):
                  patch.object(engine, "elasticsearch_client") as es, \
                  patch.object(engine, "embed_text", return_value=[.1]*384):
                 es.options.return_value = es
-                es.indices.get_alias.return_value = {"pinned": {"aliases": {}}}
+                es.indices.get_alias.return_value = {"pinned": {"aliases": {engine.SEARCH_ALIAS: {}}}}
                 es.search.return_value = {"hits": {"hits": [hit]}}
                 result = engine.hybrid_search_weighted("q", 10)
                 self.assertEqual(es.indices.get_alias.call_count, 1)
@@ -77,7 +77,9 @@ class RoutingTests(unittest.TestCase):
         with patch.object(engine, "elasticsearch_client") as es, \
              patch.object(engine, "embed_text", return_value=[.1]*384):
             active = ["before"]
-            es.indices.get_alias.side_effect = lambda **kwargs: {active[0]: {"aliases": {}}}
+            es.indices.get_alias.side_effect = lambda **kwargs: {
+                active[0]: {"aliases": {engine.SEARCH_ALIAS: {}}},
+            }
             def search(**kwargs):
                 active[0] = "after"
                 return {"hits": {"hits": []}}
@@ -90,7 +92,7 @@ class RoutingTests(unittest.TestCase):
     def test_incremental_writes_follow_the_published_generation(self):
         with patch.object(engine, "elasticsearch_client") as es, \
              patch.object(engine, "create_symbol_index"):
-            es.indices.get_alias.return_value = {"generation": {"aliases": {}}}
+            es.indices.get_alias.return_value = {"generation": {"aliases": {engine.SEARCH_ALIAS: {}}}}
             es.options.return_value.delete_by_query.return_value = {
                 "timed_out": False, "total": 0, "deleted": 0,
                 "failures": [], "version_conflicts": 0,

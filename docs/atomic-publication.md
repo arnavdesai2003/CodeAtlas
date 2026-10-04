@@ -254,3 +254,11 @@ The shared refresh validator requires mapping responses and shard metadata
 before checking integer zero shard failures. Malformed containers produce the
 existing incomplete-refresh error, retaining building work and stopping alias
 publication. No tests were added or run for this response-shape guard.
+
+Alias resolution requires a single-target mapping with a nonempty string index
+name and mapping metadata containing the requested alias. Malformed or unrelated
+responses raise instead of being used as a concrete generation or falling back
+to legacy routing. Only an Elasticsearch not-found response enables the existing
+legacy fallback. Resolution still occurs once per hybrid request, with the same
+target shared by both branches. Existing success fixtures were aligned; no tests
+were added or run for this follow-up.
