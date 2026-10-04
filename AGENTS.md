@@ -1689,3 +1689,17 @@ ES/tasks mocked, SQLite locks no-op; quiescence attests isolated test state only
 No live maintenance/deletion, application/services/data/settings changes or new
 quality/performance claims. Real reader quiescence/server deletion, PostgreSQL
 crash, partition and power-loss durability remain outside this coverage.
+
+## Latest milestone: shared recovery test fixtures (2026-10-04)
+
+Consolidated disk SQLite/foreign-key setup and bounded spawn/exit/owned-child
+cleanup into tests/recovery_support.py. Publication disk-backed simulated side
+effects moved to tests/publication_process_fixture.py. Recovery tests no longer
+import fixtures from other test modules or retention's environment-mutating
+setup. All original scenarios/assertions retained; 367 offline tests pass.
+README replaces growing chronological test entries with current coverage and
+links; hardening-validation documents fixtures and scope.
+
+Test organization only; no application/live services/data/settings changes,
+new retrieval evaluation or performance claims. External side effects remain
+mocked, SQLite coordination no-op, prior live probe limitations still apply.

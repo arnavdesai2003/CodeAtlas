@@ -1,25 +1,15 @@
 """Abrupt process-exit recovery with disk SQLite and mocked external services."""
-import multiprocessing
 import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
 
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
+from recovery_support import _sessions, run_exit_child
 
 from app.db.database import Base
 from app.db.models import CodeFile, CodeSymbol, Repository, RepositorySyncJob
 from app.indexer import incremental
-
-
-def _sessions(path):
-    engine = create_engine("sqlite:///" + str(path))
-    @event.listens_for(engine, "connect")
-    def foreign_keys(connection, _):
-        connection.execute("PRAGMA foreign_keys=ON")
-    return engine, sessionmaker(engine, autoflush=False, expire_on_commit=False)
 
 
 def _exit_during_sync(database_path, root, boundary):
@@ -84,21 +74,7 @@ class SyncProcessRecoveryTests(unittest.TestCase):
                                       qualified_name="original", kind="function", start_line=1,
                                       end_line=2, code="def original():\n    return 1"))
                     db.commit()
-                child = multiprocessing.get_context("spawn").Process(
-                    target=_exit_during_sync, args=(str(database), str(root), boundary))
-                try:
-                    child.start()
-                    child.join(15)
-                    self.assertFalse(child.is_alive(), "Sync child did not finish within budget.")
-                    self.assertEqual(child.exitcode, 73)
-                finally:
-                    if child.is_alive():
-                        child.terminate()
-                        child.join(5)
-                    if child.is_alive():
-                        child.kill()
-                        child.join(5)
-                    child.close()
+                run_exit_child(_exit_during_sync, (str(database), str(root), boundary), exitcode=73)
                 with sessions() as db:
                     symbol = db.query(CodeSymbol).one()
                     if boundary == "before_metadata_commit":

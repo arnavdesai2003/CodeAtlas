@@ -1,5 +1,4 @@
 """Ingestion exits preserve orphan/registered clones for manual reconciliation."""
-import multiprocessing
 import os
 from pathlib import Path
 import tempfile
@@ -10,11 +9,7 @@ from app.db.database import Base
 from app.db.models import CodeFile, CodeSymbol, Repository
 from app.indexer import repository
 from app.indexer.errors import RepositoryConflict
-from test_sync_process_recovery import _sessions
-
-URL = "https://github.com/owner/fixture"
-SOURCE = "def ingested():\n    return 1\n"
-
+from recovery_support import _sessions, run_exit_child, URL, SOURCE
 
 def _exit_during_ingestion(database, root, boundary):
     sql, sessions = _sessions(database)
@@ -61,21 +56,7 @@ class IngestionProcessRecoveryTests(unittest.TestCase):
             sql, sessions = _sessions(database)
             try:
                 Base.metadata.create_all(sql)
-                child = multiprocessing.get_context("spawn").Process(
-                    target=_exit_during_ingestion, args=(str(database), str(clones), boundary))
-                try:
-                    child.start()
-                    child.join(15)
-                    self.assertFalse(child.is_alive(), "Ingestion child exceeded budget.")
-                    self.assertEqual(child.exitcode, 75)
-                finally:
-                    if child.is_alive():
-                        child.terminate()
-                        child.join(5)
-                    if child.is_alive():
-                        child.kill()
-                        child.join(5)
-                    child.close()
+                run_exit_child(_exit_during_ingestion, (str(database), str(clones), boundary), exitcode=75)
                 self.assertTrue(destination.is_dir())
                 before = {path.relative_to(destination).as_posix(): path.read_bytes()
                           for path in destination.rglob("*") if path.is_file()}

@@ -1,6 +1,5 @@
 """Interrupted builds retain attempts and replay onto fresh generations."""
 import json
-import multiprocessing
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,8 +8,8 @@ from app.db.database import Base
 from app.db.models import (IndexPublicationJob, Repository, RepositoryFullIndexJob,
                            SearchIndexGeneration)
 from app.search.generation_lifecycle import utc_now
-from test_publication_process_recovery import _publish, SOURCE, STAGE
-from test_sync_process_recovery import _sessions
+from publication_process_fixture import _publish, SOURCE, STAGE
+from recovery_support import _sessions, run_exit_child
 
 
 class PublicationBuildProcessRecoveryTests(unittest.TestCase):
@@ -34,21 +33,8 @@ class PublicationBuildProcessRecoveryTests(unittest.TestCase):
                         db.add(SearchIndexGeneration(index_name=name, index_uuid="uuid-" + name,
                             repository_id=1, state=state, created_at=utc_now()))
                     db.commit()
-                child = multiprocessing.get_context("spawn").Process(target=_publish,
-                    args=(str(database), str(external), boundary), kwargs={"building": True})
-                try:
-                    child.start()
-                    child.join(15)
-                    self.assertFalse(child.is_alive(), "Build child exceeded budget.")
-                    self.assertEqual(child.exitcode, 74)
-                finally:
-                    if child.is_alive():
-                        child.terminate()
-                        child.join(5)
-                    if child.is_alive():
-                        child.kill()
-                        child.join(5)
-                    child.close()
+                run_exit_child(_publish, (str(database), str(external), boundary),
+                    kwargs={"building": True}, exitcode=74)
                 before = json.loads(external.read_text())
                 self.assertEqual(before["active"], SOURCE)
                 with sessions() as db:

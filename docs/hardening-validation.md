@@ -49,3 +49,18 @@ The next [scratch publication protocol verification](atomic-publication.md#isola
 passed against real Elasticsearch/Redis with temporary SQLite metadata and
 deterministic vectors. It adds nine offline safety/failure tests (318 total).
 PostgreSQL concurrency and model quality/performance remain outside this check.
+
+## Shared process-recovery fixtures (2026-10-04)
+
+The later process-exit and ingestion-race coverage brings the offline suite to
+367 tests. `tests/recovery_support.py` owns file-backed SQLite sessions with
+foreign keys enabled, bounded spawn/exit assertions and termination/kill/join
+cleanup for owned children. `tests/publication_process_fixture.py` contains the
+disk-backed simulated publication side effects. Recovery modules no longer
+import fixtures from other test modules, including the retention module's
+environment-mutating setup. The existing 367 tests pass after consolidation;
+no scenarios or assertions were removed. README now summarizes current coverage
+and links the detailed protocol/recovery documents.
+
+This milestone changes test organization only. No application behavior, live
+services/data/settings, retrieval evaluation or performance claims changed.

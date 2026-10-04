@@ -198,30 +198,25 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The unit suite mocks external services and does not download models. Existing
-`scripts/test_*` are manual integration utilities, some with import-time side
-effects. The 2026-10-04 [hardening validation](docs/hardening-validation.md)
-passed 304 offline tests, including 29 new response, recovery and HTTP boundary
-regressions. This does not replace live protocol or retrieval verification.
-Subsequent [isolated Redis verification](docs/cache-consistency.md#isolated-redis-protocol-verification-2026-10-04)
-passed the live cache protocol checks and brought the offline suite to 309 tests.
-The [scratch publication protocol check](docs/atomic-publication.md#isolated-publication-protocol-verification-2026-10-04)
-subsequently passed against real Elasticsearch/Redis. The
-[PostgreSQL writer coordination probe](docs/writer-lock-verification.md) passed
-shared/exclusive exclusion, commit persistence and exception release checks;
-its independent-process follow-up also passed normal/terminated owner release.
-Six [abrupt sync process-exit regressions](docs/sync-recovery.md#abrupt-process-exit-regression-coverage-2026-10-04)
-verify durable metadata and pending-job replay. Seven
-[ready-stage publication process-exit tests](docs/atomic-publication.md#ready-stage-process-exit-coverage-2026-10-04)
-cover alias/finalization recovery. Seven
-[interrupted-build process-exit tests](docs/atomic-publication.md#building-stage-process-exit-coverage-2026-10-04)
-verify fresh-stage replay and abandoned-attempt preservation. Five
-[ingestion process-exit tests](docs/sync-recovery.md#ingestion-process-exit-regression-coverage-2026-10-04)
-verify clone preservation and conservative retry conflicts. Three
-[cross-process reservation races](docs/sync-recovery.md#cross-process-ingestion-reservation-races-2026-10-04)
-verify that losing ingestions preserve the owner's clone. Six
-[retention process-exit tests](docs/index-generation-retention.md#cleanup-process-exit-regression-coverage-2026-10-04)
-verify reviewed cleanup replay and identity protection; 367 offline tests now pass.
+The offline suite passes **367 tests** (2026-10-04), mocks external services and
+does not download models. Existing `scripts/test_*` are manual integration
+utilities, some with import-time side effects; collect only `tests/`.
+
+Recovery tests use shared file-backed SQLite and bounded spawned-process fixtures.
+They cover sync checkpoints, publication stages, ingestion clone preservation,
+directory reservation races and reviewed retention. Abrupt child exits bypass
+ordinary cleanup; external side effects remain simulated. See
+[hardening validation](docs/hardening-validation.md),
+[sync/ingestion recovery](docs/sync-recovery.md),
+[atomic publication](docs/atomic-publication.md) and
+[generation retention](docs/index-generation-retention.md) for boundaries and limits.
+
+Separate live probes verified [Redis cache protocols](docs/cache-consistency.md#isolated-redis-protocol-verification-2026-10-04),
+[scratch Elasticsearch/Redis publication](docs/atomic-publication.md#isolated-publication-protocol-verification-2026-10-04)
+and [PostgreSQL writer coordination](docs/writer-lock-verification.md), including
+release after owner termination. These checks do not establish cross-store
+atomicity, database/server crash recovery, retrieval quality or capacity.
+
 Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as
 metrics. The inherited hybrid Recall@10 baseline is **0.880**; preserve quality

@@ -1,7 +1,6 @@
 """Reviewed cleanup process exits retain audit and reconcile exact identities."""
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 import json
-import multiprocessing
 import os
 from pathlib import Path
 import tempfile
@@ -11,8 +10,16 @@ from unittest.mock import Mock, patch
 from app.db.database import Base
 from app.db.models import SearchIndexGeneration
 from app.search import generation_retention as retention
-from test_generation_retention import ROOT, ALIAS, NOW, name
-from test_sync_process_recovery import _sessions
+from recovery_support import _sessions, run_exit_child
+
+
+ROOT = "test_symbols"
+ALIAS = "test_active"
+NOW = datetime(2026, 10, 1, tzinfo=timezone.utc)
+
+
+def name(number):
+    return f"{ROOT}_generation_{number:032x}"
 
 
 def _client(external, boundary=None):
@@ -83,21 +90,7 @@ class RetentionProcessRecoveryTests(unittest.TestCase):
                     self.assertEqual([item["index_name"] for item in plan["candidates"]], [name(3), name(4)])
                     reviewed.write_text(json.dumps(plan))
                 original_plan = reviewed.read_bytes()
-                child = multiprocessing.get_context("spawn").Process(target=_apply,
-                    args=(str(database), str(external), str(reviewed), boundary))
-                try:
-                    child.start()
-                    child.join(15)
-                    self.assertFalse(child.is_alive(), "Cleanup child exceeded budget.")
-                    self.assertEqual(child.exitcode, 76)
-                finally:
-                    if child.is_alive():
-                        child.terminate()
-                        child.join(5)
-                    if child.is_alive():
-                        child.kill()
-                        child.join(5)
-                    child.close()
+                run_exit_child(_apply, (str(database), str(external), str(reviewed), boundary), exitcode=76)
                 before = json.loads(external.read_text())
                 audit_committed = boundary in {"after_audit_commit", "before_second_delete"}
                 with sessions() as db:

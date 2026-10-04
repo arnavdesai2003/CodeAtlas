@@ -11,8 +11,7 @@ from app.db.database import Base
 from app.db.models import CodeFile, Repository
 from app.indexer import repository
 from app.indexer.errors import RepositoryCloneFailed, RepositoryConflict
-from test_ingestion_process_recovery import SOURCE, URL
-from test_sync_process_recovery import _sessions
+from recovery_support import _sessions, stop_child, SOURCE, URL
 
 
 def _ingest_contender(database, root, url, barrier, ready, release, pipe, fail_clone):
@@ -108,14 +107,7 @@ class IngestionProcessRaceTests(unittest.TestCase):
             finally:
                 release.set()
                 for child in children:
-                    if child.pid is not None:
-                        if child.is_alive():
-                            child.terminate()
-                        child.join(5)
-                        if child.is_alive():
-                            child.kill()
-                            child.join(5)
-                    child.close()
+                    stop_child(child)
                 for pipe in pipes + child_pipes:
                     pipe.close()
                 sql.dispose()
