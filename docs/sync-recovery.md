@@ -81,6 +81,11 @@ the clone is preserved. Inspect `GET /repositories` or PostgreSQL before
 retrying. A clone left without a row requires operator reconciliation;
 ingestion does not automatically delete or adopt that directory.
 
+Abrupt termination bypasses ordinary exception cleanup, so even a directory
+reserved before cloning or a clone created before a commit attempt can remain
+without a metadata row. Treat these as operator reconciliation cases too;
+directory presence alone does not establish a committed ingestion.
+
 ## Guarantees and remaining limits
 
 This is replayable recovery, not an atomic cross-store snapshot. Queries can
@@ -230,3 +235,24 @@ PostgreSQL crash recovery or real cross-store side-effect verification. SQLite
 locks are no-ops here; use the separate
 [PostgreSQL coordination probes](writer-lock-verification.md) for real locks.
 No application behavior or live services/data/settings changed.
+
+## Ingestion process-exit regression coverage (2026-10-04)
+
+Five tests in `tests/test_ingestion_process_recovery.py` terminate independently
+spawned ingestion processes using `os._exit(75)` after directory reservation,
+clone completion, discovery, and before/after metadata commit. Metadata uses
+temporary file-backed SQLite; Git cloning/revision reads are mocked, while source
+discovery and hashing execute normally. Abrupt exit bypasses cleanup handlers.
+
+Before commit, no repository/file metadata survives, but the reserved directory
+and any cloned fixture files remain. After commit, repository/file rows, their
+relationship, content hash and checkpoint survive together with the clone even
+though no success response is returned. Ingestion still creates no symbols.
+Fresh-session retries reject orphan or already-registered conflicts before
+cloning/deletion and preserve file contents and metadata counts. The full suite
+passes 358 offline tests.
+
+This records conservative preservation and the need for manual reconciliation;
+it adds no automatic orphan recovery. It does not test real Git clone completion,
+PostgreSQL/server crashes, power-loss durability or concurrent ingestion. No
+application, live services/data or settings changed in this coverage milestone.

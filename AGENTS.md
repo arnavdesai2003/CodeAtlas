@@ -1644,3 +1644,18 @@ ready/published tests remain intact. No production/live data/services/settings
 changes or performance/quality claims. Real late ES writes/server crash/partition
 and cross-store atomicity remain outside this mocked process-exit coverage.
 See atomic-publication docs for full boundary/limitation details.
+
+## Latest milestone: ingestion process-exit coverage (2026-10-04)
+
+Five spawned-process tests exit without cleanup after directory reservation,
+clone/discovery completion and before/after commit. File-backed SQLite and mocked
+Git with real discovery/hashing verify precommit metadata rollback and retained
+orphan directories; postcommit repository/file/hash/checkpoint metadata persists
+with clone. Fresh-session retry conflicts before Git/deletion, preserving contents
+and row counts. Ingestion creates no symbols. 358 offline tests pass.
+
+Docs clarify abrupt exits can leave orphans even before a commit attempt. Inspect
+metadata before manual reconciliation; no automatic adoption/deletion added.
+No production/live services/data/settings changes or performance/quality claims.
+Real Git clone, PostgreSQL/server crash, power-loss and concurrent-ingestion
+behavior are outside these mocked process-exit tests. See sync-recovery docs.
