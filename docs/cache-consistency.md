@@ -97,3 +97,11 @@ with its observed generation retained, permitting a healthy fenced refill.
 Normal serialized cache writes already have unique object fields. This adds no
 full row schema validation, key changes, rotation or flush. No tests were added
 or run and no live Redis entries were changed for this follow-up.
+
+Lua reads require a two-item list/tuple reply and a nonempty string generation,
+matching the client's decoded-response configuration. Malformed replies become
+unknown-generation misses: retrieval continues without cache fill or miss
+coalescing. The write helper also rejects invalid/empty tokens before contacting
+Redis. Valid tokens remain opaque strings; no token-format migration is added.
+Corrupt JSON with a valid token still permits fenced refill. No tests were added
+or run and no live Redis entries were changed for this guard.

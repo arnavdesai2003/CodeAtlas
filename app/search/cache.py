@@ -87,12 +87,18 @@ def _valid_shape(results, limit):
 
 def get_cached_search(query: str, limit: int) -> CacheLookup:
     try:
-        generation, value = redis_client.eval(
+        reply = redis_client.eval(
             _READ_SCRIPT, 1, GENERATION_KEY, uuid4().hex,
             ENTRY_PREFIX, _query_digest(query, limit),
         )
     except Exception:
         # Unknown generation means retrieval can continue, but cannot cache.
+        return CacheLookup()
+
+    if not isinstance(reply, (list, tuple)) or len(reply) != 2:
+        return CacheLookup()
+    generation, value = reply
+    if not isinstance(generation, str) or not generation:
         return CacheLookup()
 
     if value is None:
@@ -113,7 +119,7 @@ def set_cached_search(
     query: str, limit: int, results: list[dict], *, generation: str | None,
 ) -> bool:
     # Never obtain a new token after retrieval: that would admit stale results.
-    if generation is None:
+    if not isinstance(generation, str) or not generation:
         return False
     if not _valid_shape(results, limit):
         return False

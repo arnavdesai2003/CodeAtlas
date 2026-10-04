@@ -1426,3 +1426,13 @@ unchanged. No full row schema validation, key migration, rotation or flush added
 No tests added or run under the recorded constraint; diff whitespace checks
 passed. No live Redis/services/settings/corpus changes or new metrics claimed.
 See cache-consistency.
+
+## Latest milestone: Redis generation reply validation (2026-10-04)
+
+Cache reads require two-item list/tuple Lua replies with nonempty string
+generation tokens. Invalid replies return unknown-generation misses, keeping
+retrieval independent and disabling cache fill/coalescing. Cache writes reject
+invalid/empty tokens before Redis access. Valid opaque tokens and corrupt-JSON
+generation-bound refill remain supported; decoded Redis configuration unchanged.
+No tests added or run under the recorded constraint; diff whitespace checks
+passed. No live Redis/services/settings/corpus changes or new metrics claimed.
