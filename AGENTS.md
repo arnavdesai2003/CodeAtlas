@@ -1246,3 +1246,14 @@ invalidation/checkpoint finalization; committed sync jobs remain replayable. Ret
 repeats idempotent path deletion and stored-ID indexing. No cross-store atomicity
 claim. Updated the existing successful-response fixture to match ES response
 shape. No tests were run or added for this change, per current agent instruction.
+
+## Latest follow-up: incremental deletion fixture alignment (2026-10-04)
+
+Static review found the published-generation incremental-write success fixture
+still returned an empty Delete By Query response. Updated that existing fixture
+to explicit successful completion with zero matching total/deleted counts, zero
+conflicts and no failures, consistent with strict response validation. No new
+tests added or tests run, preserving the prior milestone's recorded constraint.
+Diff whitespace checks passed; no production behavior, live services, corpus,
+cache or settings changed. The previously reported 275-test result predates the
+strict deletion change and is not a validation claim for either follow-up.

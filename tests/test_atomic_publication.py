@@ -91,7 +91,10 @@ class RoutingTests(unittest.TestCase):
         with patch.object(engine, "elasticsearch_client") as es, \
              patch.object(engine, "create_symbol_index"):
             es.indices.get_alias.return_value = {"generation": {"aliases": {}}}
-            es.options.return_value.delete_by_query.return_value = {}
+            es.options.return_value.delete_by_query.return_value = {
+                "timed_out": False, "total": 0, "deleted": 0,
+                "failures": [], "version_conflicts": 0,
+            }
             engine.delete_paths_from_elasticsearch(1, ["main.py"])
             self.assertEqual(es.options.return_value.delete_by_query.call_args.kwargs["index"], "generation")
 
