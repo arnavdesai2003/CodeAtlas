@@ -256,3 +256,25 @@ This records conservative preservation and the need for manual reconciliation;
 it adds no automatic orphan recovery. It does not test real Git clone completion,
 PostgreSQL/server crashes, power-loss durability or concurrent ingestion. No
 application, live services/data or settings changed in this coverage milestone.
+
+## Cross-process ingestion reservation races (2026-10-04)
+
+Three tests in `tests/test_ingestion_process_race.py` force two independent
+processes to reach the destination `mkdir` together, after both have passed the
+initial existence checks. The production reservation runs against actual
+temporary directories and file-backed SQLite. Git cloning/revision reads are
+mocked. A barrier controls the race; the winning owner pauses after creating a
+source file while the losing contender reports its conflict.
+
+Identical URLs and `.git` URL variants sharing the same destination each produce
+one committed repository/file pair. The loser leaves the owner's file unchanged.
+In the third case, the owner subsequently fails cloning: the loser still preserves
+the in-progress directory, and only the owner's ordinary failure cleanup removes
+it. Both processes exit and all metadata/file outcomes are checked. The offline
+suite passes 361 tests.
+
+This verifies the directory reservation mechanism across local processes, not
+PostgreSQL unique-constraint races, real Git/network behavior, filesystem races
+with external operators or distributed filesystem guarantees. It does not change
+URL canonicalization or automatically reconcile orphan clones. No production or
+live data/service/settings changes were made.

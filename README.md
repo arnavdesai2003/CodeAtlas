@@ -217,7 +217,9 @@ cover alias/finalization recovery. Seven
 [interrupted-build process-exit tests](docs/atomic-publication.md#building-stage-process-exit-coverage-2026-10-04)
 verify fresh-stage replay and abandoned-attempt preservation. Five
 [ingestion process-exit tests](docs/sync-recovery.md#ingestion-process-exit-regression-coverage-2026-10-04)
-verify clone preservation and conservative retry conflicts; 358 offline tests now pass.
+verify clone preservation and conservative retry conflicts. Three
+[cross-process reservation races](docs/sync-recovery.md#cross-process-ingestion-reservation-races-2026-10-04)
+verify that losing ingestions preserve the owner's clone; 361 offline tests now pass.
 Multi-repository evaluation requires the indexed corpus and validates
 25 ground-truth cases against PostgreSQL. Track invalid cases as well as
 metrics. The inherited hybrid Recall@10 baseline is **0.880**; preserve quality

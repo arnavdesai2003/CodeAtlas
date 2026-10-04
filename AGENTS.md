@@ -1659,3 +1659,18 @@ metadata before manual reconciliation; no automatic adoption/deletion added.
 No production/live services/data/settings changes or performance/quality claims.
 Real Git clone, PostgreSQL/server crash, power-loss and concurrent-ingestion
 behavior are outside these mocked process-exit tests. See sync-recovery docs.
+
+## Latest milestone: cross-process ingestion reservation races (2026-10-04)
+
+Three deterministic two-process tests force both contenders past initial existence
+checks before the production destination mkdir. Same URLs and .git variants sharing
+the destination yield one committed repository/file pair. Winner pauses with a
+source file until loser reports conflict; contents remain intact. Clone-failure
+case verifies loser preservation before owner's ordinary cleanup removes its
+directory, leaving no rows. Both children stopped. 361 offline tests pass.
+
+Real temporary directories/file-backed SQLite; Git clone/revisions mocked. No
+production/live data/services/settings or URL canonicalization changes. This
+does not establish PostgreSQL constraint races, real Git/network behavior,
+external filesystem replacement or distributed filesystem guarantees. See
+sync-recovery docs. Prior process-exit and publication coverage remains passing.
