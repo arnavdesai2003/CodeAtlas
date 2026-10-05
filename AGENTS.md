@@ -2038,3 +2038,17 @@ count unchanged. Localizes dominant gap across forwarding between requests,
 not unique mechanism or split prior-response/next-request legs. No production,
 defaults/ranking/corpus/cache changes or HTTP capacity claim. Raw traces remain
 temporary. See docs/paired-forwarding-trace.md for inferred-role limitations.
+
+## Latest milestone: inter-request idle diagnostic (2026-10-05)
+
+profile_search_transport accepts --idle-delays-ms finite [0,100], validated before
+clients. Runs full-response pooled idle blocks with zero-delay A/B brackets;
+without flag retains old controls. Measured gap and search+gap+alias sum report
+added waiting, so alias-only improvement cannot masquerade as pair speedup.
+All complete hits must match reference; start/end routing/UUID/count checked.
+Five regressions cover safe arguments, bounds, brackets/full request, waiting
+accounting, hit mismatch and cleanup. All 457 offline tests pass; actual help safe.
+Live attempt blocked: Docker Desktop manually paused, owned process stopped,
+Docker left paused. No idle measurements, unique mechanism or speedup claimed.
+No production/query/ranking/settings/cache/index/API changes or model downloads.
+See docs/transport-idle-controls.md; resume live control when Docker available.

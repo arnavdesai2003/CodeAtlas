@@ -9,7 +9,8 @@ import argparse
 import json
 import platform
 import statistics
-from time import perf_counter
+import math
+from time import perf_counter, sleep
 from unittest.mock import Mock, patch
 
 from elasticsearch import Elasticsearch
@@ -32,11 +33,29 @@ class TracingNode(Urllib3HttpNode):
         return response
 
 
-def main():
+def idle_delay(value):
+    try:
+        delay = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("idle delay must be finite and in [0, 100] ms") from exc
+    if not math.isfinite(delay) or not 0 <= delay <= 100:
+        raise argparse.ArgumentTypeError("idle delay must be finite and in [0, 100] ms")
+    return delay
+
+
+def idle_controls(delays, client):
+    return [("idle_0_A", client, {}, 0)] + [
+        (f"idle_{delay:g}", client, {}, delay) for delay in delays if delay > 0
+    ] + [("idle_0_B", client, {}, 0)]
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--samples", type=int, default=30)
     parser.add_argument("--warmups", type=int, default=5)
-    args = parser.parse_args()
+    parser.add_argument("--idle-delays-ms", nargs="+", type=idle_delay,
+                        help="Run only full-response idle controls, bracketed by zero-delay blocks; added wait is included in pair timing.")
+    args = parser.parse_args(argv)
     if args.samples < 1 or args.warmups < 0:
         parser.error("samples must be positive and warmups nonnegative")
     clients = []
@@ -65,14 +84,17 @@ def main():
             "platform": platform.platform(), "python": platform.python_version(),
             "index": index, "uuid": uuid, "documents": count,
             "samples_per_block": args.samples, "excluded_warmups": args.warmups}), flush=True)
-        for label, client, changes in [
+        controls = [
             ("full", plain, {}), ("no_source", plain, {"source": False}),
             ("no_embedding", plain, {"source": {"excludes": ["embedding"]}}),
             ("zero_hits", plain, {"size": 0}), ("gzip", gzip, {}),
             ("close_search", plain.options(headers={"connection": "close"}), {}),
             ("full_control", plain, {}),
-        ]:
-            timings = {key: [] for key in ("search_ms", "alias_ms", "node_ms", "took_ms", "decoded_bytes")}
+        ]
+        controls = idle_controls(args.idle_delays_ms, plain) if args.idle_delays_ms is not None else [
+            (*control, 0) for control in controls]
+        for label, client, changes, delay in controls:
+            timings = {key: [] for key in ("search_ms", "alias_ms", "node_ms", "took_ms", "decoded_bytes", "inter_request_gap_ms", "pair_ms")}
             encodings = set()
             for i in range(args.warmups + args.samples):
                 query = QUERIES[i % len(QUERIES)]
@@ -80,21 +102,27 @@ def main():
                 start = perf_counter()
                 response = client.search(**(requests[query] | changes))
                 search_ms = (perf_counter() - start) * 1000
+                search_end = perf_counter()
                 trace = node.last_response.copy()
+                if delay:
+                    sleep(delay / 1000)
                 start = perf_counter()
+                gap_ms = (start - search_end) * 1000
                 observed = resolve(gzip if label == "gzip" else plain)
                 alias_ms = (perf_counter() - start) * 1000
                 if observed != index:
                     raise RuntimeError("Routing changed; discard this comparison.")
-                if label in ("full", "gzip", "close_search", "full_control") and response["hits"] != expected[query]:
+                if not changes and response["hits"] != expected[query]:
                     raise RuntimeError("Control changed search hits; discard this comparison.")
                 if i >= args.warmups:
                     for key, value in {"search_ms": search_ms, "alias_ms": alias_ms,
                         "node_ms": trace["node_ms"], "took_ms": response["took"],
-                        "decoded_bytes": trace["decoded_bytes"]}.items():
+                        "decoded_bytes": trace["decoded_bytes"], "inter_request_gap_ms": gap_ms,
+                        "pair_ms": search_ms + gap_ms + alias_ms}.items():
                         timings[key].append(value)
                     encodings.add(trace["content_encoding"] or "identity")
             print(json.dumps({"control": label, "successes": args.samples,
+                "requested_idle_ms": delay,
                 "averages": {key: statistics.mean(values) for key, values in timings.items()},
                 "alias_p95_ms": percentile(timings["alias_ms"], .95),
                 "response_encodings": sorted(encodings)}), flush=True)

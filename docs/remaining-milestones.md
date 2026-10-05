@@ -55,3 +55,5 @@ The latest [header trace](forwarding-packet-trace.md) removes the earlier host
 capture-access block without establishing a unique root cause.
 The subsequent [paired trace](paired-forwarding-trace.md) localizes the dominant
 gap across the forwarding boundary; exact leg/mechanism remains unresolved.
+The next [idle-time control](transport-idle-controls.md) is implemented and tested
+offline; its live run was blocked by manually paused Docker Desktop.
