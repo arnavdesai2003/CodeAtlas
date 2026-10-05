@@ -1905,3 +1905,14 @@ distractor positions, first repeated exact hit and empty evaluation rejection.
 Production code unchanged. No live evaluation, data/settings/API changes or
 performance claim; Docker remains manually paused. See validation checkpoint.
 All 416 offline tests pass.
+
+## Latest milestone: evaluation output validation (2026-10-05)
+
+Evaluation checks every returned hit before scoring: list of at most ten dicts
+with nonempty repository/qualified-name strings. Previously an early exact hit
+could hide malformed later hits; over-limit results could also affect MRR.
+Short/empty lists remain valid. Invalid output uses existing sanitized CLI exit 1
+without final summary. Three regressions cover malformed/trailing/over-limit
+outputs, valid short lists and actual CLI failure. No retrieval/ranking changes
+or live measurements; Docker remains manually paused.
+All 419 offline tests pass.

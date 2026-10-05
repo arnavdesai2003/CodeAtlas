@@ -304,6 +304,15 @@ def evaluate(
             limit=10,
         )
 
+        if not isinstance(results, list) or len(results) > 10:
+            raise ValueError("Invalid evaluation result list")
+        for result in results:
+            if not isinstance(result, dict) or any(
+                not isinstance(result.get(field), str) or not result[field]
+                for field in ("repository", "qualified_name")
+            ):
+                raise ValueError("Invalid evaluation result identity")
+
         rank = find_rank(
             results,
             case,

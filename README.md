@@ -200,7 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **416 tests** (2026-10-05), mocks external services and
+The offline suite passes **419 tests** (2026-10-05), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -244,6 +244,8 @@ CLI database/model/backend failures exit 1 with sanitized output marking any
 partial results incomplete; they do not trigger automatic evaluation retries.
 Repository names must resolve uniquely for ground-truth validation; ambiguous
 names are invalid cases rather than arbitrarily selecting a GitHub owner.
+Evaluation rejects malformed result lists, more than ten hits, or hits without
+nonempty repository/qualified-name strings before scoring. Short/empty lists are valid.
 The [2026-10-04 live checkpoint](docs/validation-checkpoint-2026-10-04.md)
 reproduced every metric with 25 valid cases and verified six repositories,
 4,340 symbols/documents, legacy routing and no pending jobs.

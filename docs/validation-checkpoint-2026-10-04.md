@@ -103,3 +103,15 @@ when repeated, and reject metrics for an empty case set without retrieval.
 Production evaluation and retrieval code are unchanged. No live evaluation or
 performance measurement was attempted; Docker remains manually paused.
 All 416 offline tests pass.
+
+## Retrieval output validation — 2026-10-05
+
+Evaluation validates the complete returned list before matching: at most ten
+dictionary hits with nonempty string repository and qualified-name fields.
+Previously a first correct hit could hide malformed later hits, and extra hits
+beyond the requested limit could affect MRR. Invalid outputs fail through the
+existing sanitized CLI boundary without a final summary. Short and empty lists
+remain valid measurements. Three regressions cover these cases and CLI failure.
+Retrieval/ranking and valid-output metric arithmetic are unchanged. No live
+evaluation was attempted; Docker remains manually paused.
+All 419 offline tests pass.
