@@ -72,3 +72,23 @@ tests pass; an actual help invocation still exited safely. No live evaluation or
 store inspection was rerun, so the quality/count results above remain the prior
 2026-10-04 observations. No data/index/cache/settings/API changes or new quality/
 performance claim occurred.
+
+## Repository identity validation — 2026-10-05
+
+Ground-truth repository names must now resolve to exactly one metadata row.
+Different GitHub owners can register repositories with the same name; the previous
+first-row lookup could validate one arbitrarily while name-based hit matching
+could credit another. Duplicate names now produce the invalid-case reason
+`repository name is ambiguous`, are excluded from subset metrics and cause the
+existing incomplete-evaluation exit 1. Unique repositories and missing-repository/
+symbol classifications remain unchanged. This does not change stored names,
+retrieval responses, qualified-name matching or ranking.
+
+Two real temporary SQLite regressions verify duplicate-owner ambiguity and the
+unchanged unique/missing classifications. All 413 offline tests pass. No live
+ingestion, reindexing, schema/settings/API change or performance claim.
+
+Live evaluation was attempted but could not complete: Docker Desktop reported
+that it was manually paused. The owned evaluation process was stopped; Docker
+was left paused. No new live metrics are claimed; the earlier 2026-10-04 results
+remain prior observations.

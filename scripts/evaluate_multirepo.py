@@ -195,16 +195,16 @@ def validate_test_cases() -> tuple[list[dict], list[dict]]:
 
     try:
         for case in TEST_CASES:
-            repository = (
+            repositories = (
                 db.query(Repository)
                 .filter(
                     Repository.name
                     == case["repository"]
                 )
-                .first()
+                .all()
             )
 
-            if repository is None:
+            if not repositories:
                 invalid_cases.append(
                     {
                         **case,
@@ -212,6 +212,11 @@ def validate_test_cases() -> tuple[list[dict], list[dict]]:
                     }
                 )
                 continue
+
+            if len(repositories) != 1:
+                invalid_cases.append({**case, "reason": "repository name is ambiguous"})
+                continue
+            repository = repositories[0]
 
             symbol = (
                 db.query(CodeSymbol)

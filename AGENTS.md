@@ -1884,3 +1884,15 @@ database/four method failure positions and exits; 411 offline tests pass.
 Actual help safe. No live evaluation/store inspection rerun, data/index/cache/
 settings/API change or new performance/quality claim. Oct4 live results remain
 prior observations. See validation-checkpoint docs for CLI failure boundaries.
+
+## Latest milestone: evaluation repository identity validation (2026-10-05)
+
+Evaluator requires exactly one Repository row per ground-truth name; different
+GitHub owners can share names. Replaces arbitrary first-row validation with
+invalid "repository name is ambiguous"; excluded cases cause existing exit 1.
+Unique/missing repo/symbol handling unchanged. No stored-name/response/qualified-
+name matching/ranking change. Two SQLite regressions bring suite to 413 tests.
+No ingestion/reindex/schema/settings/API change or performance claim. See
+validation-checkpoint docs for scope and limitations.
+Live evaluation attempt blocked by manually paused Docker Desktop; owned process
+stopped and Docker left paused. No new live metrics; Oct4 results remain prior.
