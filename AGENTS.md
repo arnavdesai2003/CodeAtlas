@@ -1957,3 +1957,24 @@ it does not claim those research questions are resolved. Installed Docker CLI
 has no unpause command; no engine restart, live tuning, ranking or settings change.
 All 431 offline tests pass in one full run. Working quality baseline remains
 the Oct4 live observation, not a newly verified gate pass.
+
+## Latest milestone: post-restart live verification (2026-10-05)
+
+User restarted Docker; PG/ES/Redis healthy. Fresh read-only CPU/one-thread,
+offline-model multi-repo evaluation passed explicit .880 gate, 25 valid/0 invalid,
+every baseline reproduced (hybrid Recall@10 .880/MRR .499). Legacy eight-case
+evaluation/sweep exited0; printed .60, not applied and not multi-repo evidence.
+Real Redis and scratch ES/Redis publication verifiers passed; private artifacts
+removed and normal routing/UUID/count/cache generation unchanged. PG lock and
+owned-process exit/termination verifiers passed without metadata/schema writes.
+Real-socket HTTP verifier passed all eight cases and stopped ephemeral server.
+Its remaining ignored-argument gap fixed: argparse before sockets/server, safe
+help, sanitized probe/cleanup exit1; three regressions. All 434 offline tests pass.
+
+Start/end inventory legacy codeatlas_symbols UUID RAHAzCX7Tn2804qrSkpkCQ,
+4340 documents, no issues/candidates; no pending sync/full/publication jobs.
+No live ingestion/reindex/publication/retention/cache rotation/API restart/.env/
+default changes. No capacity/latency claim. sudo -n tcpdump -D still requires
+password; no capture/kernel change. Research (tracing, cross-process sharing,
+cross-store visibility, leases/rollback) remains open, not covered by these passes.
+See docs/validation-restart-2026-10-05.md and remaining-milestones.md.

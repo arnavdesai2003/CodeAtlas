@@ -1,5 +1,6 @@
 """Isolated real-socket verification of production body middleware, no stores."""
 import http.client
+import argparse
 import json
 import socket
 import subprocess
@@ -41,7 +42,7 @@ def request(port, wire):
         return response.status, body
 
 
-def main():
+def verify_http_receipt():
     with socket.socket() as reservation:
         reservation.bind(("127.0.0.1", 0))
         port = reservation.getsockname()[1]
@@ -111,5 +112,16 @@ def main():
     print(json.dumps({"completed": True, "server_stopped": True, "cases": len(cases) + 1}))
 
 
+def main(argv=None):
+    argparse.ArgumentParser(description=__doc__).parse_args(argv)
+    try:
+        verify_http_receipt()
+    except Exception as exc:
+        print(json.dumps({"status": "failed", "error": type(exc).__name__,
+                          "detail": "HTTP verification or owned-server cleanup failed; no success claimed."}))
+        return 1
+    return 0
+
+
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

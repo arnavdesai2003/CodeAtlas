@@ -200,7 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **431 tests** (2026-10-05), mocks external services and
+The offline suite passes **434 tests** (2026-10-05), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -255,6 +255,9 @@ Use `evaluate_multirepo` for the multi-repository corpus baseline.
 For optimization checks, add `--minimum-hybrid-recall-at-10 0.880`: a complete
 run below that unrounded threshold exits 1. Without the flag, success means
 completeness only. See [remaining work and dependencies](docs/remaining-milestones.md).
+The [post-restart live checkpoint](docs/validation-restart-2026-10-05.md) passed
+the quality gate, reproduced every multi-repository baseline metric, and verified
+isolated cache/publication, PostgreSQL coordination and real-socket HTTP protocols.
 The [2026-10-04 live checkpoint](docs/validation-checkpoint-2026-10-04.md)
 reproduced every metric with 25 valid cases and verified six repositories,
 4,340 symbols/documents, legacy routing and no pending jobs.

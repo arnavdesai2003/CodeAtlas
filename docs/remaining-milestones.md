@@ -2,7 +2,7 @@
 
 Checkpoint: 2026-10-05. This is an inventory of unresolved work, not a claim that
 research questions or live verification have been completed.
-All 431 offline tests passed in the final full run; actual evaluator help passed.
+All 434 offline tests passed in the final full run; evaluator/verifier help passed.
 
 ## Evaluation tooling
 
@@ -24,14 +24,15 @@ does not assess other recall cutoffs, MRR, semantic/reranked regressions, or
 latency; compare the entire results with the documented baseline. Thresholds
 never change retrieval or settings.
 
-## Live verification dependency
+## Live verification completed after restart
 
-The last completed live quality checkpoint was 2026-10-04. Docker Desktop was
-manually paused during the subsequent evaluation attempt. Its CLI has no
-unpause command in the installed version; restarting the entire engine is not
-a substitute for read-only verification. Resume Docker through its Dashboard
-before running the command above. No new live quality or capacity is claimed.
-See [validation history](validation-checkpoint-2026-10-04.md).
+After the user restarted Docker on 2026-10-05, all three stores were healthy.
+The live multi-repository quality gate passed with all 25 cases valid and every
+baseline metric reproduced. Legacy evaluation and its read-only weight sweep
+also exited successfully. Isolated Redis/publication, PostgreSQL lock/process,
+and real-socket HTTP checks passed with owned artifacts/processes cleaned up.
+No performance/capacity measurement or recommendation application occurred.
+See [restart validation](validation-restart-2026-10-05.md).
 
 ## Open research and architectural work
 
