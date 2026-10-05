@@ -1,5 +1,10 @@
 # Performance measurements
 
+The [2026-10-05 loopback header trace](forwarding-packet-trace.md) shows prompt
+alias request/ACK followed by delayed response on pooled connections. This is
+component evidence, not HTTP capacity or a unique transport root cause; defaults
+remain unchanged.
+
 ## Baseline established 2026-09-26
 
 Measured in this repository on macOS arm64, Python 3.13.15, cached MiniLM model

@@ -1978,3 +1978,21 @@ default changes. No capacity/latency claim. sudo -n tcpdump -D still requires
 password; no capture/kernel change. Research (tracing, cross-process sharing,
 cross-store visibility, leases/rollback) remains open, not covered by these passes.
 See docs/validation-restart-2026-10-05.md and remaining-milestones.md.
+
+## Latest investigation: privileged host forwarding trace (2026-10-05)
+
+User authorized sudo capture; no credential saved to files or printed. Privileged
+lo0 header-only tcpdump succeeded, stopped normally: 3885 packets/zero kernel drops.
+Matched host curl controls: 80 measured pairs, 20 excluded warmups, all expected
+statuses; routing/UUID/4340 count unchanged. Reused request→ACK avg .011/.010 ms,
+request→response 19.596/18.689 ms; last search data→request .087/.092 ms. Fresh
+response .899/.770 ms. Delay follows prompt loopback transmit/ACK; this does not
+prove delivery to the VM or distinguish forwarding/server/return path.
+
+New offline analyze_forwarding_headers requires complete controlled IPv4 blocks,
+packet sizes/lifecycle/ACKs/responses, excludes warmups and sanitizes failures.
+HTTP roles inferred from sizes, no payload decoding; not general packet analysis.
+Four regressions; all 438 offline tests pass. ES container lacks tcpdump/tshark/ss;
+no package/kernel/Docker/default/production/ranking changes. No HTTP/capacity
+measurement or unique mechanism claimed. Raw temporary traces uncommitted.
+See docs/forwarding-packet-trace.md; simultaneous downstream tracing still needed.

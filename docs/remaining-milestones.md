@@ -2,7 +2,7 @@
 
 Checkpoint: 2026-10-05. This is an inventory of unresolved work, not a claim that
 research questions or live verification have been completed.
-All 434 offline tests passed in the final full run; evaluator/verifier help passed.
+All 438 offline tests passed in the final full run; evaluator/verifier help passed.
 
 ## Evaluation tooling
 
@@ -38,7 +38,7 @@ See [restart validation](validation-restart-2026-10-05.md).
 
 | Work | Evidence and prerequisite | Completion criterion |
 | --- | --- | --- |
-| Forwarding-delay attribution | Host-forwarded curl reproduces the penalty without Python; privileged packet capture was unavailable. | Matched packet/server/forwarding traces establish a mechanism, followed by matched HTTP and quality checks for any fix. Keep transport defaults unchanged until justified. |
+| Forwarding-delay attribution | Host header tracing shows prompt request/ACK followed by delayed response; the container has no tracing tools installed. | Simultaneous VM/container or forwarding/server traces distinguish downstream processing from return-path delay, followed by matched HTTP/quality checks for any fix. Keep defaults unchanged until justified. |
 | Cross-process miss sharing | Mixed-query two-worker bursts vary with assignment; current coalescing is intentionally process-local. | A representative workload establishes a material need, then a bounded failure/recovery design and generation-fencing tests demonstrate safe sharing. No distributed lock or infrastructure is justified yet. |
 | Atomic metadata/cache/index visibility | Full alias publication is atomic in Elasticsearch, while incremental sync updates in place and metadata/cache transitions are separate. | Specify reader and writer visibility during each failure window, then implement a recoverable protocol with crash/interleaving and real-store verification. Current journals and retained generations alone do not provide cross-store atomicity. |
 | Rollback and reader-safe online retention | Retention requires quiescence; retained indices lack coordinated metadata/cache rollback and reader leases. | An explicit rollback/lease design and failure protocol is reviewed and verified before removing maintenance quiescence or offering rollback. No automatic deletion is enabled. |
@@ -49,3 +49,5 @@ do not delete journals, manually change aliases, or run full indexing alongside
 legacy writers to force progress. Relevant evidence is in
 [performance](performance.md), [coalescing](cache-coalescing.md),
 [publication](atomic-publication.md), and [retention](index-generation-retention.md).
+The latest [header trace](forwarding-packet-trace.md) removes the earlier host
+capture-access block without establishing a unique root cause.
