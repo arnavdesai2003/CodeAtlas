@@ -55,7 +55,16 @@ def verify(*, live, timeout):
     identity = None
     for name, arguments in OFFLINE + (LIVE if live else []):
         env = os.environ.copy()
-        if name != "offline_tests":
+        if name == "offline_tests":
+            # Unit fixtures must not inherit a deployed API's authentication
+            # or real store credentials. Live checks get a fresh copy below.
+            env.update(APP_ENV="test", API_KEY="", GITHUB_WEBHOOK_SECRET="",
+                       ELASTICSEARCH_API_KEY="",
+                       DATABASE_URL="postgresql+psycopg://test:test@offline.invalid/test",
+                       ELASTICSEARCH_URL="http://offline.invalid:9200",
+                       REDIS_URL="redis://offline.invalid:6379/15",
+                       HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1")
+        else:
             env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1",
                        EMBEDDING_DEVICE="cpu", TORCH_NUM_THREADS="1")
         print(json.dumps({"check": name, "status": "running"}), flush=True)

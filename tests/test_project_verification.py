@@ -2,6 +2,7 @@
 import contextlib
 import io
 import json
+import os
 import subprocess
 import unittest
 from unittest.mock import Mock, patch
@@ -16,6 +17,33 @@ INVENTORY = {"cluster_uuid": "cluster", "active_index": "active", "issues": [],
 
 
 class ProjectVerificationTests(unittest.TestCase):
+    def test_production_environment_is_isolated_only_for_offline_child(self):
+        deployed = {"APP_ENV": "production", "API_KEY": "private-test-api",
+                    "GITHUB_WEBHOOK_SECRET": "private-test-webhook",
+                    "ELASTICSEARCH_API_KEY": "private-test-search",
+                    "DATABASE_URL": "postgresql://private-test-db@deployed.invalid/db",
+                    "REDIS_URL": "rediss://deployed.invalid:6379",
+                    "ELASTICSEARCH_URL": "https://deployed.invalid:9243"}
+        def run(args, env, timeout):
+            if "unittest" in args:
+                self.assertEqual(env["APP_ENV"], "test")
+                for key in ("API_KEY", "GITHUB_WEBHOOK_SECRET", "ELASTICSEARCH_API_KEY"):
+                    self.assertEqual(env[key], "")
+                for key in ("DATABASE_URL", "REDIS_URL", "ELASTICSEARCH_URL"):
+                    self.assertIn("offline.invalid", env[key])
+                self.assertEqual(env["HF_HUB_OFFLINE"], "1")
+            else:
+                for key, value in deployed.items():
+                    self.assertEqual(env[key], value)
+            if "scripts.inspect_recovery_jobs" in args:
+                return 0, json.dumps(JOURNALS)
+            if "scripts.manage_index_generations" in args:
+                return 0, json.dumps(INVENTORY)
+            return 0, ""
+        with patch.dict(os.environ, deployed), patch.object(command, "run_check", side_effect=run), \
+             contextlib.redirect_stdout(io.StringIO()):
+            command.verify(live=True, timeout=300)
+
     def test_help_and_invalid_timeout_do_not_run_checks(self):
         with patch.object(command, "verify") as verify:
             for args, status in ((["--help"], 0), (["--timeout", "59"], 2)):

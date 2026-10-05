@@ -2094,3 +2094,47 @@ volumes retained, no down-v. Development stack/data/API/.env untouched. No model
 or corpus downloads, quality/capacity claims, remote resources, public DNS or TLS
 issuance. Public deployment awaits target server/SSH key access and domain;
 AMD64 runtime and real-target indexing/search/restore remain unverified.
+
+## Latest milestone: Render deployment configuration (2026-10-05)
+
+Render replaces the VPS target; no server/SSH/custom-domain access is required.
+Root render.yaml declares Docker API (1c-2g, one worker/instance), managed PG17
+(0.1c-256mb, 1GB), managed Key Value256mb, and private ES9.4.3 (1c-2g, 1GB heap,
+10GB disk, mmap disabled). API has a 10GB /app/data disk for existing data/repos
+clones and HF_HOME=/app/data/model-cache. Render owns HTTPS; no Caddy/Compose
+orchestration on Render. The previous package remains, with instructions archived
+in docs/deployment-selfhosted.md. Current instructions: docs/deployment.md.
+
+Image startup execs Uvicorn on 0.0.0.0 using PORT (local default8000), preserves
+nonroot/CPU/parser-build work. Settings normalize standard Render Postgres URLs
+to installed psycopg3 and private ES hostport references to HTTP. Explicit TLS
+URLs remain unchanged; optional SecretStr ELASTICSEARCH_API_KEY supports managed
+external Elasticsearch. Store URLs remain environment supplied. /health keeps
+all-store200/503 behavior. No ranking/model/dimension/candidate changes.
+
+API/webhook secrets use sync:false; store connections use Blueprint references.
+No secrets generated/committed. Auto Git deploys off; initial Blueprint creation
+is a manual paid action. Estimated supplied baseline71.30USD/month (API25,
+ES25, PG6+0.30storage, KeyValue10, two10GB disks5); free KeyValue alternative61.30.
+No viable fully free complete persistent workflow; free PG expires30days, free
+web lacks disks, ES unsuitable512MB. Elastic Cloud Hosted is documented as an
+external managed alternative requiring separate quote and protocol validation.
+
+469 offline tests pass on host; final native ARM64 image offline gate passed
+under1CPU/2GB with production-style parent settings. Gate now isolates test
+credentials/authentication only in the offline child; live children keep deployed
+settings (new regression). Render public JSON schema validates the Blueprint.
+Both final ARM64 and AMD64 images build. Earlier full AMD64 emulation run468 had
+26 recovery fixture15sec timeouts, no OOM events; other442 passed. Three failure
+representatives passed with temporary diagnostic60sec deadline, child33.611/
+33.498/33.500sec. Repository deadlines/tests were not relaxed. Native Render AMD64
+execution remains unverified; do not claim the standard emulated suite passed.
+
+Isolated local stack verified assigned10000 port, host access through loopback
+18002, normalized non-localhost store URLs, health, missing-key401/authenticated
+listing200, UID10001 parsing, writable disk and marker persistence across restart.
+Marker removed and owned stack stopped; test volumes retained. Development
+services/API/.env/corpus untouched. No models/corpus downloaded, new retrieval or
+capacity claims, cloud purchases/resources or actual Render deployment. Manual
+creation, model warming/indexing, public HTTPS/search, actual disk permissions,
+restart persistence and backup restoration are target-side launch checks.

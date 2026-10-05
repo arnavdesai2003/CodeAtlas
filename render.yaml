@@ -1,0 +1,91 @@
+# Review paid resource estimates in docs/deployment.md before creating a Blueprint.
+# No resource is created by committing this file. Initial creation deploys manually.
+services:
+  - type: web
+    name: codeatlas-api
+    runtime: docker
+    region: oregon
+    plan: 1c-2g
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeployTrigger: "off"
+    healthCheckPath: /health
+    disk:
+      name: codeatlas-files
+      mountPath: /app/data
+      sizeGB: 10
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: codeatlas-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: codeatlas-cache
+          property: connectionString
+      - key: ELASTICSEARCH_URL
+        fromService:
+          type: pserv
+          name: codeatlas-search
+          property: hostport
+      - key: API_KEY
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: EMBEDDING_DEVICE
+        value: cpu
+      - key: HF_HOME
+        value: /app/data/model-cache
+      - key: BENCHMARK_CACHE_BYPASS_ENABLED
+        value: "false"
+      - key: ELASTICSEARCH_CLOSE_SEARCH_CONNECTIONS
+        value: "false"
+
+  - type: keyvalue
+    name: codeatlas-cache
+    region: oregon
+    plan: 256mb
+    ipAllowList: []
+    maxmemoryPolicy: allkeys-lru
+
+  - type: pserv
+    name: codeatlas-search
+    runtime: image
+    region: oregon
+    plan: 1c-2g
+    numInstances: 1
+    image:
+      url: docker.elastic.co/elasticsearch/elasticsearch:9.4.3
+    disk:
+      name: codeatlas-search-data
+      mountPath: /usr/share/elasticsearch/data
+      sizeGB: 10
+    envVars:
+      - key: PORT
+        value: "9200"
+      - key: discovery.type
+        value: single-node
+      - key: network.host
+        value: 0.0.0.0
+      - key: http.port
+        value: "9200"
+      - key: node.store.allow_mmap
+        value: "false"
+      - key: xpack.security.enabled
+        value: "false"
+      - key: ES_JAVA_OPTS
+        value: -Xms1g -Xmx1g
+
+databases:
+  - name: codeatlas-postgres
+    region: oregon
+    plan: 0.1c-256mb
+    postgresMajorVersion: "17"
+    databaseName: codeatlas
+    user: codeatlas
+    diskSizeGB: 1
+    ipAllowList: []

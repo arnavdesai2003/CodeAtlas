@@ -28,7 +28,7 @@ RUN useradd --uid 10001 --create-home codeatlas \
 COPY --chown=codeatlas:codeatlas app ./app
 COPY --chown=codeatlas:codeatlas scripts ./scripts
 COPY --chown=codeatlas:codeatlas tests ./tests
-COPY --chown=codeatlas:codeatlas Dockerfile compose.production.yaml .dockerignore ./
+COPY --chown=codeatlas:codeatlas Dockerfile compose.production.yaml render.yaml .dockerignore ./
 USER codeatlas
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--no-proxy-headers"]
+CMD ["python", "-B", "-m", "scripts.start_api"]

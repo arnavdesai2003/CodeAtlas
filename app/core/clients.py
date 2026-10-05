@@ -9,6 +9,7 @@ elasticsearch_client = Elasticsearch(
     request_timeout=60,
     retry_on_timeout=True,
     max_retries=3,
+    api_key=settings.elasticsearch_api_key.get_secret_value() or None,
 )
 
 

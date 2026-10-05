@@ -2,6 +2,7 @@
 !requirements.txt
 !Dockerfile
 !compose.production.yaml
+!render.yaml
 !.dockerignore
 !app/
 !app/**

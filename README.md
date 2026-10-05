@@ -381,9 +381,11 @@ Search rejects timed-out or failed-shard results and reports Elasticsearch outag
 with a sanitized 503; see [search failures](docs/search-failures.md).
 Invalid or non-finite retrieval scores also fail before fusion/caching; valid
 score ranking remains unchanged.
-The production Docker stack packages the API, private stores and HTTPS proxy;
-see [deployment](docs/deployment.md) for server setup, credentials, corpus bootstrap
-and launch checks. Public hosting still requires a server and domain. The underlying
+Render is the deployment target: [deployment](docs/deployment.md) explains the
+Docker Web Service, managed Postgres/Key Value, private Elasticsearch, persistent
+files and Render HTTPS. The root `render.yaml` is ready for manual Blueprint
+creation; no cloud resources have been created. The previous Compose/Caddy
+package is retained as a self-hosted alternative. The underlying
 transport cause of the measured resolution delay remains unresolved; an opt-in
 connection workaround is available.
 
