@@ -1,5 +1,6 @@
 from __future__ import annotations
 import argparse
+import math
 
 from app.db.database import SessionLocal
 from app.db.models import CodeSymbol, Repository
@@ -391,8 +392,21 @@ def evaluate(
 # Main
 # ---------------------------------------------------------------------
 
+def recall_threshold(value):
+    try:
+        threshold = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("recall threshold must be a number in [0, 1]") from exc
+    if not math.isfinite(threshold) or not 0 <= threshold <= 1:
+        raise argparse.ArgumentTypeError("recall threshold must be a number in [0, 1]")
+    return threshold
+
+
 def main(argv=None):
-    argparse.ArgumentParser(description="Evaluate four retrieval methods against validated multi-repository cases.").parse_args(argv)
+    parser = argparse.ArgumentParser(description="Evaluate four retrieval methods against validated multi-repository cases.")
+    parser.add_argument("--minimum-hybrid-recall-at-10", type=recall_threshold,
+                        help="Fail a complete evaluation below this threshold; use 0.880 for the documented baseline.")
+    args = parser.parse_args(argv)
     valid_cases, invalid_cases = (
         validate_test_cases()
     )
@@ -489,6 +503,11 @@ def main(argv=None):
     if invalid_cases:
         print("Evaluation incomplete: invalid ground-truth cases were excluded; subset metrics are not a full verification.")
         return 1
+    if args.minimum_hybrid_recall_at_10 is not None:
+        if hybrid_metrics["Recall@10"] < args.minimum_hybrid_recall_at_10:
+            print("Quality gate failed: hybrid Recall@10 is below the required minimum.")
+            return 1
+        print("Quality gate passed: hybrid Recall@10 meets the required minimum.")
     return 0
 
 

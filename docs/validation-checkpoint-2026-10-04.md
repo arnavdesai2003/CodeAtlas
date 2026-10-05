@@ -144,3 +144,15 @@ tuning was run while Docker remains manually paused. Default weights, settings,
 retrieval and corpus remain unchanged; tuning only prints recommendations.
 426 tests passed in the full run. One explicit-case SQLite regression added
 after that run began passed separately (427 total covered).
+
+## Explicit quality gate and remaining work — 2026-10-05
+
+Multi-repository evaluation optionally gates complete output using
+`--minimum-hybrid-recall-at-10 0.880`. The finite [0,1] argument is validated
+before database access. A complete result below the unrounded threshold exits
+1; equality passes. Invalid ground truth cannot pass a gate. No-flag behavior
+and all retrieval methods/metrics remain unchanged. Four regressions cover these
+boundaries. Actual help passed, and all 431 tests passed in one full offline run.
+No live gate was run while Docker remained paused. No weight, ranking, settings,
+corpus or service change. [Remaining work](remaining-milestones.md) records
+unresolved research and verification dependencies without claiming completion.

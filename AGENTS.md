@@ -1942,3 +1942,18 @@ safe arguments, incomplete sets, failures, sweep/methods and scoring validation.
 Queries, weights, ranking/settings unchanged; no live run while Docker paused.
 426 full-suite tests passed; one subsequently added explicit-case SQLite test
 passed separately (427 total covered). Actual help for both commands passed.
+
+## Latest milestone: explicit evaluation quality gate and work inventory (2026-10-05)
+
+Multi-repo evaluation accepts --minimum-hybrid-recall-at-10 in finite [0,1].
+Invalid args fail before services. Complete results below the unrounded threshold
+exit 1; equality passes. Incomplete ground truth cannot pass a quality gate.
+No-flag completeness behavior and metrics/methods unchanged. Four regressions
+cover parsing, correct method/equality, incomplete cases and endpoints.
+Use .880 for optimization baseline, while comparing all other metrics manually.
+Actual help safe. docs/remaining-milestones.md inventories completed tooling,
+paused-service validation and open tracing/sharing/cross-store/rollback research;
+it does not claim those research questions are resolved. Installed Docker CLI
+has no unpause command; no engine restart, live tuning, ranking or settings change.
+All 431 offline tests pass in one full run. Working quality baseline remains
+the Oct4 live observation, not a newly verified gate pass.

@@ -200,8 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-All **427 offline tests** pass (2026-10-05: 426 in the full run plus one added
-explicit-case regression verified separately). The suite mocks external services and
+The offline suite passes **431 tests** (2026-10-05), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -253,6 +252,9 @@ truth before retrieval and reject the whole run if any case is invalid or none
 exist. They share result validation, safe `--help`, and sanitized nonzero failures.
 Tuning only prints a recommendation; it never changes weights or settings.
 Use `evaluate_multirepo` for the multi-repository corpus baseline.
+For optimization checks, add `--minimum-hybrid-recall-at-10 0.880`: a complete
+run below that unrounded threshold exits 1. Without the flag, success means
+completeness only. See [remaining work and dependencies](docs/remaining-milestones.md).
 The [2026-10-04 live checkpoint](docs/validation-checkpoint-2026-10-04.md)
 reproduced every metric with 25 valid cases and verified six repositories,
 4,340 symbols/documents, legacy routing and no pending jobs.
