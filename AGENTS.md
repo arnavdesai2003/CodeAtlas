@@ -1896,3 +1896,12 @@ No ingestion/reindex/schema/settings/API change or performance claim. See
 validation-checkpoint docs for scope and limitations.
 Live evaluation attempt blocked by manually paused Docker Desktop; owned process
 stopped and Docker left paused. No new live metrics; Oct4 results remain prior.
+
+## Latest milestone: evaluation metric regression coverage (2026-10-05)
+
+Three offline tests independently verify Recall boundary ranks 1/3/5/10/miss,
+MRR 49/150, denominator, query/limit, repository+qualified-name matching,
+distractor positions, first repeated exact hit and empty evaluation rejection.
+Production code unchanged. No live evaluation, data/settings/API changes or
+performance claim; Docker remains manually paused. See validation checkpoint.
+All 416 offline tests pass.

@@ -92,3 +92,14 @@ Live evaluation was attempted but could not complete: Docker Desktop reported
 that it was manually paused. The owned evaluation process was stopped; Docker
 was left paused. No new live metrics are claimed; the earlier 2026-10-04 results
 remain prior observations.
+
+## Metric calculation regression coverage — 2026-10-05
+
+Three offline scoring tests use hand-calculated ranks 1/3/5/10/miss to verify
+Recall@1/3/5/10 and MRR (49/150), including misses in the denominator. They
+check the original query and limit 10 passed to retrieval, preserve distractor
+positions, require both repository and qualified name, use the first exact hit
+when repeated, and reject metrics for an empty case set without retrieval.
+Production evaluation and retrieval code are unchanged. No live evaluation or
+performance measurement was attempted; Docker remains manually paused.
+All 416 offline tests pass.
