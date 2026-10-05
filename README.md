@@ -381,8 +381,11 @@ Search rejects timed-out or failed-shard results and reports Elasticsearch outag
 with a sanitized 503; see [search failures](docs/search-failures.md).
 Invalid or non-finite retrieval scores also fail before fusion/caching; valid
 score ranking remains unchanged.
-Public deployment hardening and the underlying transport cause of the measured
-resolution delay remain unresolved; an opt-in connection workaround is available.
+The production Docker stack packages the API, private stores and HTTPS proxy;
+see [deployment](docs/deployment.md) for server setup, credentials, corpus bootstrap
+and launch checks. Public hosting still requires a server and domain. The underlying
+transport cause of the measured resolution delay remains unresolved; an opt-in
+connection workaround is available.
 
 Inspect registered Python source without reindexing:
 `.venv/bin/python -B -m scripts.audit_python_sources`

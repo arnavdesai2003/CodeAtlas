@@ -1,0 +1,11 @@
+*
+!requirements.txt
+!Dockerfile
+!compose.production.yaml
+!.dockerignore
+!app/
+!app/**
+!scripts/
+!scripts/**
+!tests/
+!tests/**

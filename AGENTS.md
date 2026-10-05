@@ -2068,3 +2068,29 @@ transport9.4.2/urllib3 2.7.0, macOS27.0.1 arm64, full ~75KB identity responses.
 No models/Redis/writers or production code/settings/index/cache/API changes.
 457 offline tests inherited, not rerun docs-only; no fresh quality/capacity claim.
 Results and limitations: docs/transport-idle-controls.md.
+
+## Latest milestone: portable production packaging (2026-10-05)
+
+Standalone compose.production.yaml packages nonroot Python3.13 API, private PG17,
+ES9.4.3 and Redis7, plus Caddy HTTPS with only 80/443 published. Separate project
+name/volumes; production API key and webhook secret required, bypass false, CPU
+embeddings. Deployment build context excludes .env, clones and caches. New
+scripts.init_production_env creates private mode600 independent hex credentials
+without overwriting files/symlinks. No production credentials generated here.
+See docs/deployment.md for server/DNS, fresh indexing, quality gate and migration.
+
+Linux ARM64 distributed tree-sitter0.25.0 binding crashed on minimal parse and
+full offline suite. Compiling the same binding version with Bookworm gcc fixes
+minimal parsing and the full suite; grammar wheels and parser logic unchanged.
+Compiler stays in a separate image stage; CPU torch2.13.0+cpu, runtime UID10001.
+Rebuilding both binding and Python grammar from PyPI source failed with missing
+scanner symbol; only the binding is rebuilt. No broad dependency upgrades.
+
+462 offline tests pass on host and corrected Linux ARM64 image. Compose validates;
+Caddy config validates in its image. Isolated no-public-port stack with disposable
+credentials initialized fresh metadata and passed healthy dependencies, missing
+key401 and authenticated empty repository listing200. Test stack stopped; test
+volumes retained, no down-v. Development stack/data/API/.env untouched. No model
+or corpus downloads, quality/capacity claims, remote resources, public DNS or TLS
+issuance. Public deployment awaits target server/SSH key access and domain;
+AMD64 runtime and real-target indexing/search/restore remain unverified.
