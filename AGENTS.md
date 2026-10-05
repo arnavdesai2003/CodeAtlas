@@ -1996,3 +1996,28 @@ Four regressions; all 438 offline tests pass. ES container lacks tcpdump/tshark/
 no package/kernel/Docker/default/production/ranking changes. No HTTP/capacity
 measurement or unique mechanism claimed. Raw temporary traces uncommitted.
 See docs/forwarding-packet-trace.md; simultaneous downstream tracing still needed.
+
+## Latest milestone: repeatable local release acceptance (2026-10-05)
+
+scripts.verify_project defaults to offline tests; --live runs 12 sequential
+acceptance checks with CPU/one-thread cached models: journals/inventory, .880
+quality gate, new live API smoke, Redis/publication protocols, PG lock/process
+release, real-socket body receipt, final journals/inventory. Nonzero/timeout or
+pending/malformed jobs fail closed; active cluster/index UUID/count must match.
+Owned child process groups terminate/kill on timeout; forced exit may leave
+scratch artifacts, whose known identifiers are reported for inspection.
+Subprocess raw failures suppressed. No manual integration tests collected.
+
+verify_api_smoke uses production ASGI routes/live stores with random private
+Redis namespace and cleanup, no lifespan/schema creation/listening server/API
+restart. Health/listing, cold→identical cache hit and invalid query/limit passed;
+configured keys are enforced when present. Normal cache generation unchanged.
+Ten regressions and actual help passed; full --live command exited0 with all
+12 checks passed, including all 448 offline tests. No live corpus rebuild,
+normal alias/cache rotation, settings/.env change or capacity claim.
+
+docs/project-completion.md specifies current local delivery acceptance and limits.
+This completes its verification tooling and current-scope acceptance, not public
+hosting, cross-store atomicity, distributed sharing, reader leases/rollback or
+unique transport attribution. Those research items remain explicit in
+docs/remaining-milestones.md; do not claim all research implemented.

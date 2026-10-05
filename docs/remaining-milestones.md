@@ -2,7 +2,9 @@
 
 Checkpoint: 2026-10-05. This is an inventory of unresolved work, not a claim that
 research questions or live verification have been completed.
-All 438 offline tests passed in the final full run; evaluator/verifier help passed.
+All 448 offline tests passed in the combined live release acceptance run; new
+entrypoint help passed. All 12 release checks passed; see
+[release acceptance](project-completion.md). The research items below remain open.
 
 ## Evaluation tooling
 

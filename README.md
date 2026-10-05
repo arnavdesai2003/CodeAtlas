@@ -5,6 +5,10 @@ lexical BM25 retrieval with semantic vector retrieval and exposes search through
 FastAPI. PostgreSQL stores metadata, Elasticsearch stores searchable symbols
 and embeddings, and Redis caches results.
 
+Run `.venv/bin/python -B -m scripts.verify_project --live` for the combined local
+release acceptance checks. Without `--live` it runs only offline tests. See
+[release acceptance and scope](docs/project-completion.md).
+
 The current corpus contains 4,340 Python symbols across micrograd, click,
 requests, httpx, itsdangerous and markupsafe. The system includes incremental
 Git synchronization, signed GitHub push webhooks, optional cross-encoder
@@ -200,7 +204,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **438 tests** (2026-10-05), mocks external services and
+The offline suite passes **448 tests** (2026-10-05), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
