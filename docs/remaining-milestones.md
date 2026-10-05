@@ -40,7 +40,7 @@ See [restart validation](validation-restart-2026-10-05.md).
 
 | Work | Evidence and prerequisite | Completion criterion |
 | --- | --- | --- |
-| Forwarding-delay attribution | Host header tracing shows prompt request/ACK followed by delayed response; the container has no tracing tools installed. | Simultaneous VM/container or forwarding/server traces distinguish downstream processing from return-path delay, followed by matched HTTP/quality checks for any fix. Keep defaults unchanged until justified. |
+| Forwarding-delay attribution | Paired host/container traces show a long inter-request gap across forwarding but sub-ms container response after arrival. | Separate prior-response delivery from next-request forwarding and identify a mechanism, then matched HTTP/quality checks for any fix. Keep defaults unchanged until justified. |
 | Cross-process miss sharing | Mixed-query two-worker bursts vary with assignment; current coalescing is intentionally process-local. | A representative workload establishes a material need, then a bounded failure/recovery design and generation-fencing tests demonstrate safe sharing. No distributed lock or infrastructure is justified yet. |
 | Atomic metadata/cache/index visibility | Full alias publication is atomic in Elasticsearch, while incremental sync updates in place and metadata/cache transitions are separate. | Specify reader and writer visibility during each failure window, then implement a recoverable protocol with crash/interleaving and real-store verification. Current journals and retained generations alone do not provide cross-store atomicity. |
 | Rollback and reader-safe online retention | Retention requires quiescence; retained indices lack coordinated metadata/cache rollback and reader leases. | An explicit rollback/lease design and failure protocol is reviewed and verified before removing maintenance quiescence or offering rollback. No automatic deletion is enabled. |
@@ -53,3 +53,5 @@ legacy writers to force progress. Relevant evidence is in
 [publication](atomic-publication.md), and [retention](index-generation-retention.md).
 The latest [header trace](forwarding-packet-trace.md) removes the earlier host
 capture-access block without establishing a unique root cause.
+The subsequent [paired trace](paired-forwarding-trace.md) localizes the dominant
+gap across the forwarding boundary; exact leg/mechanism remains unresolved.

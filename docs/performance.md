@@ -1,5 +1,10 @@
 # Performance measurements
 
+The [paired host/container analysis](paired-forwarding-trace.md) localizes the
+dominant inter-request gap across the forwarding boundary, with sub-ms response
+after container arrival. No unique mechanism or application performance gain
+is established.
+
 The [2026-10-05 loopback header trace](forwarding-packet-trace.md) shows prompt
 alias request/ACK followed by delayed response on pooled connections. This is
 component evidence, not HTTP capacity or a unique transport root cause; defaults

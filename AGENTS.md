@@ -2021,3 +2021,20 @@ This completes its verification tooling and current-scope acceptance, not public
 hosting, cross-store atomicity, distributed sharing, reader leases/rollback or
 unique transport attribution. Those research items remain explicit in
 docs/remaining-milestones.md; do not claim all research implemented.
+
+## Latest milestone: repeatable paired trace analysis (2026-10-05)
+
+analyze_forwarding_headers accepts optional --container-trace eth0 text. Both
+complete modes/blocks and ordered client/server byte-count signatures must
+match before per-block warmup exclusion. Container ACK may piggyback in data.
+Clock comparisons use within-trace intervals only; no host/VM epoch subtraction.
+Four new regressions cover offsets, ACK, mismatch/completeness and warmups;
+final full suite 452 tests passed. Retained simultaneous traces analyzed, no
+new workload run: host response 12.726/14.273 ms versus container .438/.485;
+previous-data→next-request host .083/.091 versus container 12.523/13.943 ms.
+80 measured pairs/20 warmups, all expected statuses; both captures zero drops,
+stopped, temporary helper removed in the preceding run. Prior routing/UUID/4340
+count unchanged. Localizes dominant gap across forwarding between requests,
+not unique mechanism or split prior-response/next-request legs. No production,
+defaults/ranking/corpus/cache changes or HTTP capacity claim. Raw traces remain
+temporary. See docs/paired-forwarding-trace.md for inferred-role limitations.
