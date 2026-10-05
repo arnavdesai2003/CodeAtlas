@@ -10,6 +10,42 @@ CASE = {"repository": "fixture", "query": "example", "expected": "target"}
 
 
 class EvaluationCommandTests(unittest.TestCase):
+    def test_ground_truth_failure_has_sanitized_cli_outcome(self):
+        output = io.StringIO()
+        with patch.object(command, "validate_test_cases", side_effect=RuntimeError("private database URL")), \
+             patch.object(command, "evaluate") as evaluate, redirect_stdout(output):
+            self.assertEqual(command.cli([]), 1)
+        self.assertNotIn("private database URL", output.getvalue())
+        self.assertIn("RuntimeError: Evaluation failed", output.getvalue())
+        self.assertNotIn("FINAL SUMMARY", output.getvalue())
+        evaluate.assert_not_called()
+
+    def test_method_failure_stops_without_retry_or_success_summary(self):
+        for completed in range(4):
+            output = io.StringIO()
+            with self.subTest(completed=completed), \
+                 patch.object(command, "validate_test_cases", return_value=([CASE], [])), \
+                 patch.object(command, "evaluate", side_effect=[METRICS] * completed +
+                              [RuntimeError("private model/backend detail")]) as evaluate, redirect_stdout(output):
+                self.assertEqual(command.cli([]), 1)
+            self.assertEqual(evaluate.call_count, completed + 1)
+            self.assertNotIn("private model/backend detail", output.getvalue())
+            self.assertNotIn("FINAL SUMMARY", output.getvalue())
+            self.assertIn("partial output is not a complete result", output.getvalue())
+
+    def test_cli_preserves_existing_exit_statuses(self):
+        for status in (0, 1):
+            with patch.object(command, "main", return_value=status) as main:
+                self.assertEqual(command.cli([]), status)
+                main.assert_called_once_with([])
+        with patch.object(command, "validate_test_cases") as validate:
+            for arguments, status in ((["--help"], 0), (["--unsupported"], 2)):
+                with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as result:
+                        command.cli(arguments)
+                self.assertEqual(result.exception.code, status)
+            validate.assert_not_called()
+
     def test_invalid_cases_keep_subset_metrics_but_fail_verification(self):
         invalid = {**CASE, "reason": "symbol not found"}
         output = io.StringIO()

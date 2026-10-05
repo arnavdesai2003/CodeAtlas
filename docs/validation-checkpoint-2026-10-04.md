@@ -55,3 +55,20 @@ CPU/one-thread evaluation with cached models/downloads disabled exited 0, valida
 all 25 cases and again reproduced every metric in the table above. No new store
 count/UUID snapshot was taken for this follow-up. No corpus/index/cache/schema/
 settings/API changes or new performance/capacity claim occurred.
+
+## Evaluation failure output follow-up — 2026-10-05
+
+The CLI now catches ordinary runtime exceptions from evaluation, prints their
+type with `Evaluation failed; partial output is not a complete result.`, and
+returns exit 1 without raw exception messages or dependency tracebacks. Database
+validation failure prevents retrieval; a failing retrieval method stops subsequent
+methods without retry and before the final summary. Existing complete/incomplete
+returns remain 0/1, and help/argument-error SystemExit values remain 0/2. Direct
+Python `main()` calls still propagate exceptions for callers.
+
+Three offline regressions cover database failure, each of the four method failure
+positions, no retry/final summary and preserved exit statuses. All 411 offline
+tests pass; an actual help invocation still exited safely. No live evaluation or
+store inspection was rerun, so the quality/count results above remain the prior
+2026-10-04 observations. No data/index/cache/settings/API changes or new quality/
+performance claim occurred.

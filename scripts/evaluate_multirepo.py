@@ -475,5 +475,13 @@ def main(argv=None):
     return 0
 
 
+def cli(argv=None):
+    try:
+        return main(argv)
+    except Exception as exc:
+        print(f"{type(exc).__name__}: Evaluation failed; partial output is not a complete result.")
+        return 1
+
+
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(cli())

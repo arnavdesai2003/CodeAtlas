@@ -1871,3 +1871,16 @@ reproduced (hybrid Recall@10 .880/MRR .499).
 
 No new count/UUID snapshot, corpus/index/cache/schema/settings/API change or new
 performance/capacity claim. See validation-checkpoint docs for scope and exits.
+
+## Latest milestone: evaluation CLI failure outcomes (2026-10-05)
+
+Evaluator CLI catches ordinary runtime exceptions, prints type/fixed incomplete
+result guidance and returns 1 without raw exception details/traceback. Ground-truth
+database failures prevent retrieval; method failures stop later methods without
+retry/final summary. Complete/incomplete exits0/1 and help/argument exits0/2
+preserved. Direct main() still propagates exceptions. Three regressions cover
+database/four method failure positions and exits; 411 offline tests pass.
+
+Actual help safe. No live evaluation/store inspection rerun, data/index/cache/
+settings/API change or new performance/quality claim. Oct4 live results remain
+prior observations. See validation-checkpoint docs for CLI failure boundaries.
