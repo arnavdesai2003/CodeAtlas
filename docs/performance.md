@@ -1,5 +1,10 @@
 # Performance measurements
 
+The [completed idle-time controls](transport-idle-controls.md#completed-live-controls-after-resume)
+show lower alias latency after waiting, with worse total pair cost at 20/40 ms
+and drift in zero controls. These sequential diagnostics justify no production
+sleep or HTTP speedup claim.
+
 The [paired host/container analysis](paired-forwarding-trace.md) localizes the
 dominant inter-request gap across the forwarding boundary, with sub-ms response
 after container arrival. No unique mechanism or application performance gain

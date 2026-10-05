@@ -2052,3 +2052,19 @@ Live attempt blocked: Docker Desktop manually paused, owned process stopped,
 Docker left paused. No idle measurements, unique mechanism or speedup claimed.
 No production/query/ranking/settings/cache/index/API changes or model downloads.
 See docs/transport-idle-controls.md; resume live control when Docker available.
+
+## Latest investigation: completed idle-time controls (2026-10-05)
+
+User resumed Docker; all stores healthy. Two live read-only pooled-client runs,
+opposite nonzero delay order, 20 measured/5 warmup per seven blocks with zero
+A/B brackets: 280 measured pairs and 70 excluded warmups, plus 20 unmeasured
+reference searches. Every complete hit matched; routing/UUID/4340 count unchanged.
+20ms requested pause measured23.613/23.982ms gap; alias1.569/2.504ms, total pair
+28.614/32.350ms vs zero brackets20.870/26.969 and18.078/16.904ms. 40ms totals
+53.198/53.884ms. Shorter pauses show mixed gains/drift, not HTTP evidence.
+Supports state changing during idle, not unique timer/forwarding mechanism;
+production sleeps/default changes not justified. Python3.13.15/ESclient9.5.0/
+transport9.4.2/urllib3 2.7.0, macOS27.0.1 arm64, full ~75KB identity responses.
+No models/Redis/writers or production code/settings/index/cache/API changes.
+457 offline tests inherited, not rerun docs-only; no fresh quality/capacity claim.
+Results and limitations: docs/transport-idle-controls.md.
