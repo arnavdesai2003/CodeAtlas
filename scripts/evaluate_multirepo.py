@@ -180,7 +180,7 @@ TEST_CASES = [
 # Ground-truth validation
 # ---------------------------------------------------------------------
 
-def validate_test_cases() -> tuple[list[dict], list[dict]]:
+def validate_test_cases(test_cases=None) -> tuple[list[dict], list[dict]]:
     """
     Verify that every expected symbol really exists in the PostgreSQL
     corpus.
@@ -194,7 +194,7 @@ def validate_test_cases() -> tuple[list[dict], list[dict]]:
     invalid_cases = []
 
     try:
-        for case in TEST_CASES:
+        for case in TEST_CASES if test_cases is None else test_cases:
             repositories = (
                 db.query(Repository)
                 .filter(
@@ -250,6 +250,16 @@ def validate_test_cases() -> tuple[list[dict], list[dict]]:
 # Result matching
 # ---------------------------------------------------------------------
 
+def validate_results(results):
+    if not isinstance(results, list) or len(results) > 10:
+        raise ValueError("Invalid evaluation result list")
+    for result in results:
+        if not isinstance(result, dict) or any(
+            not isinstance(result.get(field), str) or not result[field]
+            for field in ("repository", "qualified_name")
+        ):
+            raise ValueError("Invalid evaluation result identity")
+
 def result_is_correct(
     result: dict,
     case: dict,
@@ -304,14 +314,7 @@ def evaluate(
             limit=10,
         )
 
-        if not isinstance(results, list) or len(results) > 10:
-            raise ValueError("Invalid evaluation result list")
-        for result in results:
-            if not isinstance(result, dict) or any(
-                not isinstance(result.get(field), str) or not result[field]
-                for field in ("repository", "qualified_name")
-            ):
-                raise ValueError("Invalid evaluation result identity")
+        validate_results(results)
 
         rank = find_rank(
             results,

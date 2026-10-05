@@ -29,6 +29,13 @@ class EvaluationGroundTruthTests(unittest.TestCase):
         self.assertEqual(valid, [])
         self.assertEqual(invalid, [{**case, "reason": "repository name is ambiguous"}])
 
+    def test_explicit_case_input_does_not_use_default_cases(self):
+        case = {"repository": "unique", "query": "example", "expected": "target"}
+        with patch.object(command, "SessionLocal", self.sessions), \
+             patch.object(command, "TEST_CASES", [{**case, "repository": "missing"}]):
+            self.assertEqual(command.validate_test_cases([case]), ([case], []))
+            self.assertEqual(command.validate_test_cases([]), ([], []))
+
     def test_unique_and_missing_ground_truth_keep_existing_classification(self):
         cases = [{"repository": "unique", "query": "example", "expected": "target"},
                  {"repository": "missing", "query": "example", "expected": "target"},

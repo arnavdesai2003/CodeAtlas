@@ -1,6 +1,8 @@
+import argparse
+
 from app.search.engine import hybrid_search_weighted
 from scripts.evaluate_search import TEST_CASES
-from scripts.evaluate_multirepo import find_rank
+from scripts.evaluate_multirepo import find_rank, validate_results, validate_test_cases
 
 
 WEIGHTS = [
@@ -21,6 +23,8 @@ WEIGHTS = [
 def evaluate_weight(
     semantic_weight: float,
 ) -> dict:
+    if not TEST_CASES:
+        raise ValueError("No evaluation cases")
     ranks = []
 
     for case in TEST_CASES:
@@ -30,6 +34,7 @@ def evaluate_weight(
             semantic_weight=semantic_weight,
         )
 
+        validate_results(results)
         rank = find_rank(results, case)
 
         ranks.append(rank)
@@ -71,7 +76,12 @@ def evaluate_weight(
     }
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description="Compare weights on validated micrograd cases; does not change settings.").parse_args(argv)
+    valid, invalid = validate_test_cases(TEST_CASES)
+    if invalid or not valid:
+        print("Tuning incomplete: ground truth invalid; retrieval skipped.")
+        return 1
     results = [
         evaluate_weight(weight)
         for weight in WEIGHTS
@@ -157,7 +167,16 @@ def main():
     print(
         f"MRR             : {best['mrr']:.3f}"
     )
+    return 0
+
+
+def cli(argv=None):
+    try:
+        return main(argv)
+    except Exception as exc:
+        print(f"{type(exc).__name__}: Tuning failed; partial output is not a complete result.")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cli())

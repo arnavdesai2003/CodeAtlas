@@ -1,9 +1,11 @@
+import argparse
+
 from app.search.engine import (
     bm25_search,
     semantic_search,
     hybrid_search,
 )
-from scripts.evaluate_multirepo import find_rank
+from scripts.evaluate_multirepo import find_rank, validate_results, validate_test_cases
 
 
 TEST_CASES = [
@@ -46,6 +48,8 @@ TEST_CASES = [{**case, "repository": "micrograd"} for case in TEST_CASES]
 
 
 def evaluate(search_function, name: str):
+    if not TEST_CASES:
+        raise ValueError("No evaluation cases")
     ranks = []
 
     print()
@@ -58,6 +62,7 @@ def evaluate(search_function, name: str):
             limit=10,
         )
 
+        validate_results(results)
         rank = find_rank(results, case)
 
         ranks.append(rank)
@@ -116,7 +121,12 @@ def evaluate(search_function, name: str):
     }
 
 
-def main():
+def main(argv=None):
+    argparse.ArgumentParser(description="Evaluate validated micrograd cases.").parse_args(argv)
+    valid, invalid = validate_test_cases(TEST_CASES)
+    if invalid or not valid:
+        print("Evaluation incomplete: ground truth invalid; retrieval skipped.")
+        return 1
     bm25_metrics = evaluate(
         bm25_search,
         "BM25",
@@ -157,7 +167,16 @@ def main():
             f"{semantic_metrics[metric]:>12.3f}"
             f"{hybrid_metrics[metric]:>12.3f}"
         )
+    return 0
+
+
+def cli(argv=None):
+    try:
+        return main(argv)
+    except Exception as exc:
+        print(f"{type(exc).__name__}: Evaluation failed; partial output is not a complete result.")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(cli())

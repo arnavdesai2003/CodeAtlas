@@ -129,3 +129,18 @@ These tools remain legacy micrograd diagnostics and do not validate ground truth
 in PostgreSQL; use evaluate_multirepo for the validated corpus baseline. No live
 evaluation or tuning was run; Docker remains manually paused.
 All 421 offline tests pass.
+
+## Completed legacy command hardening — 2026-10-05
+
+Both legacy commands now validate all eight micrograd cases in PostgreSQL using
+the multi-repository validator's optional explicit-case input. Invalid or empty
+ground truth fails before retrieval instead of generating partial metrics or a
+weight recommendation. They share complete result-list validation and reject
+empty scoring sets. Safe argument parsing precedes database/model work;
+sanitized CLI exceptions exit 1 and prevent success summaries. Five offline
+regressions cover both commands, including unchanged methods and weight sweep.
+Actual help invocations passed without service access. No live evaluation or
+tuning was run while Docker remains manually paused. Default weights, settings,
+retrieval and corpus remain unchanged; tuning only prints recommendations.
+426 tests passed in the full run. One explicit-case SQLite regression added
+after that run began passed separately (427 total covered).

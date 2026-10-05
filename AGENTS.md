@@ -1928,3 +1928,17 @@ These remain legacy micrograd-only diagnostics, without multi-repository
 ground-truth validation. No live measurement or weight/default change; Docker
 remains manually paused.
 All 421 offline tests pass.
+
+## Latest milestone: completed legacy evaluation hardening (2026-10-05)
+
+evaluate_search/tune_hybrid validate their eight micrograd cases with shared
+PostgreSQL repository/symbol checks before retrieval. Any invalid/empty set
+skips the entire run with exit 1; no incomplete-set weight recommendation.
+Shared result validation rejects malformed/over-limit hits. Empty scoring sets
+raise. Argparse help/errors precede DB/model execution; sanitized CLI failures
+exit 1 without success summary. Multi-repo validation accepts optional explicit
+cases, preserving its default behavior. Five regressions cover both commands,
+safe arguments, incomplete sets, failures, sweep/methods and scoring validation.
+Queries, weights, ranking/settings unchanged; no live run while Docker paused.
+426 full-suite tests passed; one subsequently added explicit-case SQLite test
+passed separately (427 total covered). Actual help for both commands passed.
