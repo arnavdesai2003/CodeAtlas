@@ -1,5 +1,6 @@
 from app.search.engine import hybrid_search_weighted
 from scripts.evaluate_search import TEST_CASES
+from scripts.evaluate_multirepo import find_rank
 
 
 WEIGHTS = [
@@ -29,17 +30,7 @@ def evaluate_weight(
             semantic_weight=semantic_weight,
         )
 
-        names = [
-            result["qualified_name"]
-            for result in results
-        ]
-
-        try:
-            rank = names.index(
-                case["expected"]
-            ) + 1
-        except ValueError:
-            rank = None
+        rank = find_rank(results, case)
 
         ranks.append(rank)
 

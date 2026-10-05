@@ -115,3 +115,17 @@ remain valid measurements. Three regressions cover these cases and CLI failure.
 Retrieval/ranking and valid-output metric arithmetic are unchanged. No live
 evaluation was attempted; Docker remains manually paused.
 All 419 offline tests pass.
+
+## Legacy evaluator repository scope — 2026-10-05
+
+The eight older micrograd cases used by evaluate_search and tune_hybrid now
+include repository identity. Both tools use the same repository/qualified-name
+matching as the multi-repository evaluator. Previously a matching qualified name
+from any repository could earn credit. Wrong-repository hits now remain
+distractors, preserving the actual correct rank. Two offline regressions verify
+all case identities, misses/ranks and unchanged retrieval arguments for both
+tools. Queries, weight sweep and application ranking/defaults are unchanged.
+These tools remain legacy micrograd diagnostics and do not validate ground truth
+in PostgreSQL; use evaluate_multirepo for the validated corpus baseline. No live
+evaluation or tuning was run; Docker remains manually paused.
+All 421 offline tests pass.

@@ -200,7 +200,7 @@ implemented in the application.
 .venv/bin/python -m scripts.evaluate_multirepo
 ```
 
-The offline suite passes **419 tests** (2026-10-05), mocks external services and
+The offline suite passes **421 tests** (2026-10-05), mocks external services and
 does not download models. Existing `scripts/test_*` are manual integration
 utilities, some with import-time side effects; collect only `tests/`.
 
@@ -246,6 +246,9 @@ Repository names must resolve uniquely for ground-truth validation; ambiguous
 names are invalid cases rather than arbitrarily selecting a GitHub owner.
 Evaluation rejects malformed result lists, more than ten hits, or hits without
 nonempty repository/qualified-name strings before scoring. Short/empty lists are valid.
+Legacy `evaluate_search` and `tune_hybrid` use eight micrograd-only cases and
+require repository plus qualified-name matches. They do not validate PostgreSQL
+ground truth; use `evaluate_multirepo` for the validated corpus baseline.
 The [2026-10-04 live checkpoint](docs/validation-checkpoint-2026-10-04.md)
 reproduced every metric with 25 valid cases and verified six repositories,
 4,340 symbols/documents, legacy routing and no pending jobs.

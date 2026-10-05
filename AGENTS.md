@@ -1916,3 +1916,15 @@ without final summary. Three regressions cover malformed/trailing/over-limit
 outputs, valid short lists and actual CLI failure. No retrieval/ranking changes
 or live measurements; Docker remains manually paused.
 All 419 offline tests pass.
+
+## Latest milestone: legacy evaluation repository matching (2026-10-05)
+
+Legacy evaluate_search and tune_hybrid cases now explicitly target micrograd.
+Both use repository+qualified-name matching; a same-named symbol elsewhere
+cannot earn credit, and distractors retain their positions. Eight queries,
+retrieval calls, weight sweep and ranking unchanged. Two offline regressions
+cover case scope, wrong-repository misses and actual rank in both tools.
+These remain legacy micrograd-only diagnostics, without multi-repository
+ground-truth validation. No live measurement or weight/default change; Docker
+remains manually paused.
+All 421 offline tests pass.

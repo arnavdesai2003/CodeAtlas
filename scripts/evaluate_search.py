@@ -3,6 +3,7 @@ from app.search.engine import (
     semantic_search,
     hybrid_search,
 )
+from scripts.evaluate_multirepo import find_rank
 
 
 TEST_CASES = [
@@ -40,6 +41,9 @@ TEST_CASES = [
     },
 ]
 
+# These legacy cases describe micrograd, even when searching a larger corpus.
+TEST_CASES = [{**case, "repository": "micrograd"} for case in TEST_CASES]
+
 
 def evaluate(search_function, name: str):
     ranks = []
@@ -54,17 +58,7 @@ def evaluate(search_function, name: str):
             limit=10,
         )
 
-        names = [
-            result["qualified_name"]
-            for result in results
-        ]
-
-        try:
-            rank = names.index(
-                case["expected"]
-            ) + 1
-        except ValueError:
-            rank = None
+        rank = find_rank(results, case)
 
         ranks.append(rank)
 
